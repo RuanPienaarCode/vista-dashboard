@@ -1,0 +1,36 @@
+# The pre-tag gate: the same build + guard suite as a local ./build.sh, on every
+# pull request and push to main, so a regression is caught before it is a
+# release candidate. Nothing release-only here — that belongs to release.yml.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # SHA-pinned to the same commits release.yml uses.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Build and run the guard suite
+        run: |
+          npm ci
+          npm run build
+          node --check main.js
+          npm test

@@ -1,0 +1,12 @@
+node_modules
+.claude/
+.vault-path
+.DS_Store
+_preview/bundle.js
+_preview/vista.css
+_preview/photos/
+_preview/app.css
+_preview/photos.json
+# Build output — regenerated from src/ by ./build.sh; ships as release assets.
+/main.js
+/styles.css

@@ -1,0 +1,587 @@
+/* ============================================================================
+   VISTA — styles (build input; root styles.css is a copy of this file)
+
+   Direction: glassmorphism over a photograph. Frosted panels (translucent
+   white fill, backdrop blur, a hairline highlight on the top edge), white
+   ink with three alpha steps, one cool accent for search highlights. The
+   photo is dimmed by a veil so the glass always reads; when the background
+   is "plain" the tokens flip to Obsidian's own theme colours.
+
+   Host-cascade discipline:
+     - the view root also carries Obsidian's .view-content (0,2,0) — root
+       overrides live on .workspace-leaf-content .view-content.vs-app.
+     - app.css's button:not(.clickable-icon) (0,1,1) beats single-class
+       rules — EVERY rule that styles a button carries the .vs-app ancestor.
+     - app.css's input[type=text] rules are reclaimed on .vs-app .vs-search-input.
+   iOS 15 floor: -webkit- prefixed backdrop-filter, no `inset` shorthand, no
+   container queries. Mobile drops per-tile backdrop blur (one blurred layer
+   per card is fine; twenty is not).
+   ============================================================================ */
+
+.vs-app {
+  --vs-ink: #ffffff;
+  --vs-dim: rgba(255, 255, 255, 0.74);
+  --vs-faint: rgba(255, 255, 255, 0.5);
+  --vs-glass: rgba(255, 255, 255, 0.085);
+  --vs-glass-2: rgba(255, 255, 255, 0.14);
+  --vs-glass-3: rgba(255, 255, 255, 0.2);
+  --vs-panel: rgba(14, 18, 28, 0.62);
+  --vs-line: rgba(255, 255, 255, 0.16);
+  --vs-line-2: rgba(255, 255, 255, 0.3);
+  --vs-shine: rgba(255, 255, 255, 0.10);
+  --vs-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  --vs-accent: #9fd0ff;
+  /* Status inks, tuned for Vista's own dark glass over a photo. They stay fixed
+     there: a host theme's --color-red/--color-green belong to ITS surfaces
+     (light-theme red is ~2.5:1 on a darkened photo). Plain mode re-points
+     them below. */
+  --vs-red: #ff8a80;
+  --vs-red-fill: #ff453a;
+  --vs-green: #b9f27c;
+  --vs-late-ink: #ffb3ad;
+  --vs-late-bg: rgba(255, 122, 112, 0.18);
+  --vs-radius: 18px;
+  --vs-blur: 20px;
+  --vs-ground: #0b0f18;
+  --vs-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  position: relative;
+  /* Height is Obsidian's to decide: app.css gives .view-content height 100%
+     inside a flex-column leaf, so on an iPhone with the floating nav the
+     view shrinks by its own margin-top (--view-top-spacing) by itself. Never
+     subtract that variable here — app.css sets it to a UNITLESS 0, and
+     calc(100% - 0) is invalid at computed-value time (height falls to auto,
+     a 0px dashboard). See .vs-page below for the bottom-safe-area pad. */
+  height: 100%;
+  overflow: hidden;
+  background: var(--vs-ground);
+  color: var(--vs-ink);
+  font-family: var(--vs-font);
+  font-size: 15px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+}
+
+.vs-app.is-plain {
+  --vs-ink: var(--text-normal);
+  --vs-dim: var(--text-muted);
+  /* Faint ink carries real content here (footers, "Missed 7 days", section
+     names), and the host's --text-faint is 2.2-2.9:1 on its own surfaces. */
+  --vs-faint: var(--text-muted);
+  --vs-glass: var(--background-secondary);
+  --vs-glass-2: var(--background-modifier-hover);
+  --vs-glass-3: var(--background-modifier-active-hover);
+  --vs-panel: var(--background-primary);
+  --vs-line: var(--background-modifier-border);
+  --vs-line-2: var(--background-modifier-border-hover);
+  --vs-shine: transparent;
+  --vs-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  --vs-accent: var(--text-accent);
+  --vs-ground: var(--background-primary);
+  /* Plain keeps the dark-glass status inks on a dark host theme (>= 4.5:1 on
+     every Obsidian dark surface); a light host needs darker ones. Obsidian's
+     own light --color-red (#e93147) is 3.4-4.2:1 and --color-green (#08b94e)
+     only 2.1-2.6:1 on its light surfaces, so they are not used for text. */
+  --vs-late-ink: var(--vs-red);
+}
+.theme-light .vs-app.is-plain {
+  --vs-red: #c4162a;
+  --vs-red-fill: #d1283a;
+  --vs-green: #1a7431;
+}
+
+.workspace-leaf-content .view-content.vs-app { padding: 0; overflow: hidden; background: var(--vs-ground); color: var(--vs-ink); }
+
+.vs-app * { box-sizing: border-box; }
+/* !important kept on purpose, not carelessly: .vs-app .vs-page button.vs-weather
+   (0,3,1 — the weather chip) already beats a non-important .vs-app .is-hidden
+   (0,2,0), and even a page-scoped .vs-app .vs-page .is-hidden (0,3,0) still
+   loses to it on the type-selector count. .vs-capture (0,2,0, display:flex)
+   and .vs-cols (0,2,0, display:grid) tie .is-hidden's own specificity and
+   sit later in the file, so source order alone would make them win too. A
+   generic hide-utility can't chase every future consumer's selector with a
+   higher one; that's what !important is for here. */
+.vs-app .is-hidden { display: none !important; }
+.vs-app .vs-spacer { flex: 1 1 auto; }
+.vs-app .vs-icon { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; flex: none; }
+.vs-app .vs-icon svg { width: 18px; height: 18px; display: block; }
+
+/* Buttons: strip Obsidian's chrome, then style per class. */
+/* (0,2,1) so it beats app.css's button:not(.clickable-icon) (0,1,1) whatever the load
+   order. Every button class that sets its own padding therefore also carries
+   .vs-page (0,3,0) — a bare .vs-app .vs-x (0,2,0) would lose to this reset. */
+.vs-app .vs-page button { background: transparent; box-shadow: none; border: 0; padding: 0; margin: 0; height: auto; font: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+/* app.css also restyles button:hover; only its ground and shadow are reset here —
+   padding must NOT be repeated or every button loses its inset on hover. */
+.vs-app .vs-page button:hover { background: transparent; box-shadow: none; }
+.vs-app .vs-page button:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 2px; }
+/* :focus-visible is Safari 15.4+; an unknown pseudo-class invalidates the
+   whole rule above, so iOS 15.0-15.3 gets no focus ring at all without this.
+   :not(:focus-visible) as a feature test is itself supported from 14.1. */
+@supports not selector(:focus-visible) {
+  .vs-app .vs-page button:focus { outline: 2px solid var(--vs-accent); outline-offset: 2px; }
+}
+
+/* ---- layers --------------------------------------------------------------- */
+
+.vs-app .vs-bg {
+  position: absolute; top: -2%; left: -2%; width: 104%; height: 104%;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  opacity: 0; transition: opacity 900ms ease; will-change: opacity;
+}
+.vs-app .vs-bg.is-front { opacity: 1; }
+.vs-app.is-plain .vs-bg { display: none; }
+.vs-app .vs-fx { position: absolute; top: 0; left: 0; pointer-events: none; }
+.vs-app .vs-veil {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(5, 8, 14, var(--vs-dim-top, 0.26)) 0%, rgba(5, 8, 14, var(--vs-dim-bot, 0.55)) 100%);
+}
+.vs-app.is-plain .vs-veil { display: none; }
+.vs-app .vs-scroll { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.vs-app .vs-page { position: relative; max-width: 1080px; margin: 0 auto; padding: 44px 28px 40px; display: flex; flex-direction: column; gap: 22px; }
+
+/* Glass */
+.vs-app .vs-glass, .vs-app .vs-search, .vs-app .vs-page .vs-tile, .vs-app .vs-card, .vs-app .vs-page .vs-iconbtn {
+  background: var(--vs-glass);
+  -webkit-backdrop-filter: blur(var(--vs-blur)) saturate(160%);
+  backdrop-filter: blur(var(--vs-blur)) saturate(160%);
+  border: 1px solid var(--vs-line);
+  box-shadow: var(--vs-shadow), inset 0 1px 0 var(--vs-shine);
+}
+.vs-app .vs-page .vs-iconbtn { box-shadow: inset 0 1px 0 var(--vs-shine); }
+/* Mobile: one blurred surface per card at most. */
+.is-mobile .vs-app .vs-tile, .is-mobile .vs-app .vs-iconbtn { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(24, 28, 40, 0.5); }
+.is-mobile .vs-app.is-plain .vs-tile, .is-mobile .vs-app.is-plain .vs-iconbtn { background: var(--vs-glass); }
+.is-mobile .vs-app { --vs-blur: 14px; }
+
+/* ---- header --------------------------------------------------------------- */
+
+.vs-app .vs-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 4px; }
+.vs-app .vs-greet { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--vs-ink); text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35); }
+.vs-app.is-plain .vs-greet { text-shadow: none; }
+.vs-app .vs-sub { margin-top: 7px; font-size: 14px; color: var(--vs-dim); }
+.vs-app .vs-clock { font-size: 44px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--vs-ink); text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35); padding-bottom: 2px; }
+.vs-app.is-plain .vs-clock { text-shadow: none; }
+
+/* ---- calendar ------------------------------------------------------------- */
+
+.vs-app .vs-head-text { position: relative; }
+.vs-app .vs-vault { margin-top: 7px; font-size: 14px; color: var(--vs-dim); }
+/* clock and date are one block, so the calendar can hang off it */
+.vs-app .vs-head-time { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
+.vs-app .vs-page button.vs-sub { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; margin-right: -6px; border-radius: 6px; }
+.vs-app .vs-head-time .vs-sub { margin-top: 4px; }
+.vs-app .vs-page button.vs-sub:hover { background: var(--vs-glass); color: var(--vs-ink); }
+.vs-app .vs-cal {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 8; width: 320px; padding: 10px;
+  border-radius: 16px; background: var(--vs-panel);
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--vs-line); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--vs-shine);
+}
+.vs-app .vs-cal-head { display: flex; align-items: center; gap: 4px; padding: 2px 2px 8px; }
+.vs-app .vs-page .vs-cal-title { flex: 1 1 auto; text-align: center; font-size: 14px; font-weight: 600; padding: 4px; border-radius: 8px; }
+.vs-app .vs-page .vs-cal-title:hover { background: var(--vs-glass-2); }
+.vs-app .vs-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.vs-app .vs-cal-dow { padding: 4px 0 6px; text-align: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--vs-faint); }
+.vs-app .vs-page .vs-cal-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 38px; border-radius: 10px; font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--vs-ink); }
+.vs-app .vs-page .vs-cal-day:hover { background: var(--vs-glass-2); }
+.vs-app .vs-page .vs-cal-day.is-out { color: var(--vs-faint); }
+.vs-app .vs-page .vs-cal-day.is-today { background: var(--vs-ink); color: var(--vs-ground); font-weight: 600; }
+.vs-app .vs-page .vs-cal-day.is-today:hover { background: var(--vs-ink); }
+.vs-app .vs-cal-dots { position: absolute; bottom: 4px; display: flex; gap: 3px; height: 4px; }
+.vs-app .vs-dot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--vs-accent); }
+.vs-app .vs-dot-event { background: #ffb86b; }
+.vs-app .vs-cal-day.is-today .vs-dot { background: var(--vs-ground); }
+.vs-app .vs-cal-foot { display: flex; align-items: center; gap: 10px; padding: 8px 4px 2px; font-size: 11px; color: var(--vs-faint); }
+.vs-app .vs-cal-key { display: inline-flex; align-items: center; gap: 5px; }
+.vs-app .vs-cal-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) { .vs-app .vs-cal { width: min(320px, calc(100vw - 32px)); left: 0; right: auto; } .vs-app .vs-cal-hint { display: none; } .vs-app .vs-head-time { align-items: flex-start; flex: 0 1 auto; min-width: 0; } .vs-app .vs-page button.vs-sub { margin-right: 0; margin-left: -6px; } }
+
+/* ---- weather + capture ---------------------------------------------------- */
+
+.vs-app .vs-head-right { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+/* The week, under the weather. Same glass as the calendar: see-through, blurred. */
+.vs-app .vs-wx {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 8; width: 440px; max-width: calc(100vw - 32px); padding: 12px 12px 10px;
+  border-radius: 16px; background: var(--vs-panel); color: var(--vs-ink); text-align: left;
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--vs-line); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--vs-shine);
+}
+.vs-app .vs-wx-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 6px; }
+.vs-app .vs-wx-place { min-width: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vs-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-wx-now { display: flex; align-items: center; gap: 12px; padding: 4px 4px 12px; border-bottom: 1px solid var(--vs-line); }
+.vs-app .vs-wx-now-icon { width: 34px; height: 34px; color: var(--vs-ink); }
+.vs-app .vs-wx-now-icon svg { width: 34px; height: 34px; }
+.vs-app .vs-wx-now-temp { font-size: 36px; font-weight: 300; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.vs-app .vs-wx-now-text { min-width: 0; }
+.vs-app .vs-wx-now-label { font-size: 15px; font-weight: 500; }
+.vs-app .vs-wx-now-sub { font-size: 12px; color: var(--vs-dim); }
+.vs-app .vs-wx-days { display: flex; flex-direction: column; padding-top: 4px; }
+.vs-app .vs-wx-day { padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.vs-app .vs-wx-day:last-child { border-bottom: 0; }
+.vs-app .vs-wx-top { display: flex; align-items: center; gap: 8px; }
+.vs-app .vs-wx-name { flex: none; width: 74px; font-size: 14px; font-weight: 500; }
+.vs-app .vs-wx-day.is-today .vs-wx-name { color: var(--vs-accent); }
+.vs-app .vs-wx-icon { flex: none; display: inline-flex; color: var(--vs-dim); }
+.vs-app .vs-wx-icon svg { width: 18px; height: 18px; }
+.vs-app .vs-wx-label { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--vs-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-wx-lo, .vs-app .vs-wx-hi { flex: none; width: 30px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.vs-app .vs-wx-lo { text-align: right; color: var(--vs-dim); }
+.vs-app .vs-wx-hi { text-align: left; font-weight: 500; }
+.vs-app .vs-wx-bar { position: relative; flex: none; width: 64px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.vs-app .vs-wx-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #7cc4ff, #ffcf6b); }
+.vs-app .vs-wx-sub { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 4px 0 0 82px; font-size: 11.5px; color: var(--vs-faint); font-variant-numeric: tabular-nums; }
+.vs-app .vs-wx-bit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.vs-app .vs-wx-bit .vs-icon { width: 13px; height: 13px; }
+.vs-app .vs-wx-bit .vs-icon svg { width: 13px; height: 13px; }
+.vs-app .vs-wx-foot { display: flex; align-items: center; gap: 8px; padding: 8px 4px 0; border-top: 1px solid var(--vs-line); font-size: 11.5px; color: var(--vs-faint); }
+.vs-app .vs-page button.vs-wx-more { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px; font-size: 12px; color: var(--vs-dim); }
+.vs-app .vs-page button.vs-wx-more:hover { background: var(--vs-glass-2); color: var(--vs-ink); }
+.vs-app .vs-wx-more .vs-icon, .vs-app .vs-wx-more .vs-icon svg { width: 13px; height: 13px; }
+@media (max-width: 760px) {
+  /* the header row is full width here, so the week spans it exactly */
+  .vs-app .vs-wx { left: 0; right: 0; width: auto; max-width: none; }
+  .vs-app .vs-wx-label { display: none; }
+  .vs-app .vs-wx-sub { padding-left: 0; }
+  .vs-app .vs-wx-top { justify-content: space-between; }
+  .vs-app .vs-wx-bar { flex: 1 1 auto; }
+}
+.vs-app .vs-page button.vs-weather { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px; margin-right: -8px; border-radius: 10px; color: var(--vs-dim); text-align: right; }
+.vs-app .vs-page button.vs-weather:hover { background: var(--vs-glass); color: var(--vs-ink); }
+.vs-app .vs-weather .vs-icon { order: 2; }
+.vs-app .vs-weather .vs-icon svg { width: 22px; height: 22px; }
+.vs-app .vs-weather-body { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; line-height: 1.2; }
+/* The date moved in beside the clock, so on a narrow header the weather has
+   to give way gracefully rather than run off the edge. */
+.vs-app .vs-page button.vs-weather { min-width: 0; }
+.vs-app .vs-weather-main, .vs-app .vs-weather-sub { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-weather-main { font-size: 14px; font-weight: 500; color: var(--vs-ink); }
+.vs-app .vs-weather-sub { font-size: 11.5px; color: var(--vs-faint); }
+.vs-app .vs-weather.is-busy .vs-icon { opacity: 0.5; }
+
+.vs-app .vs-capture { display: flex; align-items: center; gap: 10px; height: 44px; margin-top: -8px; padding: 0 12px 0 16px; border-radius: 12px; background: var(--vs-glass); border: 1px solid var(--vs-line); -webkit-backdrop-filter: blur(var(--vs-blur)); backdrop-filter: blur(var(--vs-blur)); }
+.vs-app .vs-capture:focus-within { border-color: var(--vs-line-2); }
+.vs-app .vs-capture-icon { color: var(--vs-faint); }
+/* 16px, not 14px: anything under 16px on a text input is iOS's auto-zoom
+   threshold — a smaller size makes Safari zoom the whole page in on focus. */
+.vs-app input.vs-capture-input, .vs-app input.vs-capture-input:hover, .vs-app input.vs-capture-input:focus { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; margin: 0; background: transparent; border: 0; box-shadow: none; outline: none; color: var(--vs-ink); font: inherit; font-size: 16px; }
+.vs-app input.vs-capture-input::placeholder { color: var(--vs-faint); }
+.vs-app .vs-page .vs-capture-send { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; color: var(--vs-dim); }
+.vs-app .vs-page .vs-capture-send:hover { background: var(--vs-glass-2); color: var(--vs-ink); }
+
+/* Tasks: the tick is its own button; the text opens the note. */
+.vs-app .vs-task { padding: 6px 4px 6px 8px; }
+.vs-app .vs-page .vs-task-body { flex: 1 1 auto; min-width: 0; text-align: left; padding: 3px 6px; border-radius: 8px; color: var(--vs-ink); }
+.vs-app .vs-page .vs-task-body:hover { background: var(--vs-glass-2); }
+.vs-app .vs-page .vs-rtick:hover { border-color: var(--vs-ink); background: var(--vs-glass-2); }
+.vs-app .vs-task.is-late .vs-row-sub { color: var(--vs-red); }
+
+/* Reminders (Nudge). Late borrows the Tasks card's red — two cards showing
+   the same kind of thing must not disagree. Priority is NOT coloured on the
+   row: it already decides the order, and a wall of amber says nothing. It is
+   spelled out in the reminder's own popup instead. */
+.vs-app .vs-nrow { gap: 12px; }
+.vs-app .vs-page .vs-nrow-body { flex: 1 1 auto; min-width: 0; text-align: left; padding: 2px 6px; margin: -2px -6px; border-radius: 8px; color: var(--vs-ink); }
+.vs-app .vs-page .vs-nrow-body:hover { background: var(--vs-glass-2); }
+.vs-app .vs-nrow.is-late .vs-rwhen.is-late { background: var(--vs-late-bg); color: var(--vs-late-ink); }
+
+/* The one reminder, opened from the card. */
+.vs-reminder-modal .vs-reminder-head { display: flex; align-items: center; gap: 8px; }
+.vs-reminder-modal .vs-reminder-flag { display: inline-flex; color: var(--text-warning, #d99b4a); }
+.vs-reminder-modal .vs-reminder-flag svg { width: 18px; height: 18px; }
+.vs-reminder-modal .vs-reminder-meta { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; }
+.vs-reminder-modal .vs-reminder-row { display: flex; gap: 12px; align-items: baseline; }
+.vs-reminder-modal .vs-reminder-key { flex: none; width: 84px; color: var(--text-muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.vs-reminder-modal .vs-reminder-val { flex: 1 1 auto; min-width: 0; }
+.vs-reminder-modal .vs-reminder-raw { padding: 8px 10px; border-radius: 8px; background: var(--background-modifier-hover); color: var(--text-muted); font-family: var(--font-monospace, monospace); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.vs-reminder-modal .vs-reminder-snooze { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.vs-reminder-modal .vs-chip { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--background-modifier-border); background: transparent; color: var(--text-normal); font-size: 13px; cursor: pointer; }
+.vs-reminder-modal .vs-chip:hover { background: var(--background-modifier-hover); }
+
+/* Gym */
+.vs-app .vs-gym-when { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vs-faint); }
+.vs-app .vs-gym-when.is-today { color: var(--vs-green); }
+.vs-app .vs-gym-session { padding: 2px 0; }
+.vs-app .vs-gym-day { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+
+/* ---- search --------------------------------------------------------------- */
+
+.vs-app .vs-search-wrap { position: relative; z-index: 6; }
+.vs-app .vs-search { display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 18px; border-radius: 16px; transition: border-color 160ms ease, background 160ms ease; }
+.vs-app .vs-search:focus-within { border-color: var(--vs-line-2); background: var(--vs-glass-2); }
+.vs-app .vs-search-icon { color: var(--vs-dim); }
+.vs-app .vs-search-icon svg { width: 20px; height: 20px; }
+.vs-app input.vs-search-input, .vs-app input.vs-search-input:hover, .vs-app input.vs-search-input:focus, .vs-app input.vs-search-input:active {
+  flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; margin: 0;
+  background: transparent; border: 0; box-shadow: none; outline: none;
+  color: var(--vs-ink); font: inherit; font-size: 17px; letter-spacing: -0.005em;
+}
+.vs-app input.vs-search-input::placeholder { color: var(--vs-faint); }
+.vs-app .vs-search-clear { display: none; color: var(--vs-faint); width: 28px; height: 28px; border-radius: 8px; align-items: center; justify-content: center; }
+.vs-app .vs-search-wrap.has-query .vs-search-clear { display: inline-flex; }
+.vs-app .vs-page .vs-search-clear:hover { background: var(--vs-glass-2); color: var(--vs-ink); }
+
+.vs-app .vs-results {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 7;
+  max-height: min(60vh, 520px); overflow-y: auto; padding: 6px;
+  border-radius: 16px; background: var(--vs-panel);
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--vs-line); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--vs-shine);
+}
+.vs-app.is-plain .vs-results { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18); }
+.vs-app .vs-results-label { padding: 8px 12px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--vs-faint); }
+.vs-app .vs-page .vs-result { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border-radius: 10px; text-align: left; color: var(--vs-ink); }
+.vs-app .vs-page .vs-result.is-sel { background: var(--vs-glass-2); }
+.vs-app .vs-result .vs-icon { color: var(--vs-dim); }
+.vs-app .vs-result-body { flex: 1 1 auto; min-width: 0; }
+.vs-app .vs-result-name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-result-name .suggestion-highlight { color: var(--vs-accent); font-weight: 600; }
+.vs-app .vs-result-alias { color: var(--vs-faint); font-size: 12px; }
+.vs-app .vs-result-path { flex: 0 1 auto; max-width: 42%; font-size: 12px; color: var(--vs-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.vs-app .vs-result-ext { padding: 1px 6px; border-radius: 6px; background: var(--vs-glass-2); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.vs-app .vs-result-excerpt { margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--vs-dim); word-break: break-word; overflow-wrap: anywhere; }
+.vs-app .vs-result-all { color: var(--vs-dim); }
+.vs-app .vs-kbd { font: inherit; font-size: 11px; color: var(--vs-faint); padding: 2px 6px; border-radius: 6px; border: 1px solid var(--vs-line); background: transparent; }
+
+/* ---- editing ---------------------------------------------------------------- */
+
+/* (0,4,0): beats the .vs-app .vs-page .vs-iconbtn display rule, which is (0,3,0). */
+.vs-app:not(.is-editing) .vs-page .vs-hide, .vs-app:not(.is-editing) .vs-head .vs-hide { display: none; }
+.vs-app .vs-group-row { display: flex; align-items: center; gap: 6px; }
+.vs-app .vs-group.is-off .vs-grid { opacity: 0.35; }
+.vs-app .vs-hidden-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--vs-glass); border: 1px dashed var(--vs-line-2); font-size: 12.5px; color: var(--vs-dim); }
+.vs-app .vs-hidden-label { color: var(--vs-faint); }
+.vs-app .vs-page .vs-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 999px; background: var(--vs-glass-2); border: 1px solid var(--vs-line); color: var(--vs-ink); font-size: 12.5px; }
+.vs-app .vs-page .vs-chip:hover { background: var(--vs-glass-3); border-color: var(--vs-line-2); }
+.vs-app .vs-chip .vs-icon svg { width: 14px; height: 14px; }
+.vs-app .vs-page .vs-iconbtn .vs-btn-label { font-size: 13px; font-weight: 500; padding: 0 4px 0 2px; }
+.vs-app .vs-page .vs-iconbtn.is-on { width: auto; padding: 0 8px 0 6px; gap: 2px; }
+.vs-app.is-editing .vs-capture { border-style: dashed; }
+
+/* ---- sections + tiles ----------------------------------------------------- */
+
+.vs-app .vs-section { display: flex; flex-direction: column; gap: 12px; }
+.vs-app .vs-section-head, .vs-app .vs-card-head { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.vs-app .vs-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--vs-faint); }
+.vs-app .vs-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; color: var(--vs-dim); transition: background 140ms ease, color 140ms ease, border-color 140ms ease; }
+.vs-app .vs-page .vs-iconbtn:hover { background: var(--vs-glass-2); color: var(--vs-ink); border-color: var(--vs-line-2); }
+.vs-app .vs-page .vs-iconbtn.is-on { background: var(--vs-glass-3); color: var(--vs-ink); }
+.vs-app .vs-iconbtn-sm { width: 28px; height: 28px; border-radius: 8px; }
+.vs-app .vs-iconbtn-sm .vs-icon svg { width: 15px; height: 15px; }
+.vs-app .vs-iconbtn.is-busy .vs-icon { animation: vs-spin 1s linear infinite; }
+@keyframes vs-spin { to { transform: rotate(360deg); } }
+
+.vs-app .vs-group { display: flex; flex-direction: column; gap: 10px; }
+.vs-app .vs-page .vs-group-label { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 2px 6px 2px 2px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--vs-dim); }
+.vs-app .vs-page .vs-group-label:hover { color: var(--vs-ink); background: var(--vs-glass); }
+.vs-app .vs-group-label .vs-icon { transition: transform 160ms ease; color: var(--vs-faint); }
+.vs-app .vs-group-label .vs-icon svg { width: 14px; height: 14px; }
+.vs-app .vs-group.is-collapsed .vs-group-label .vs-icon { transform: rotate(-90deg); }
+.vs-app .vs-group.is-collapsed .vs-grid { display: none; }
+
+.vs-app .vs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.vs-app .vs-page .vs-tile {
+  position: relative; display: flex; flex-direction: row; align-items: center; gap: 14px;
+  min-height: 66px; padding: 14px 16px 14px 14px; border-radius: 16px; color: var(--vs-ink); text-align: left;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.vs-app .vs-page .vs-tile:hover { transform: translateY(-2px); background: var(--vs-glass-2); border-color: var(--vs-line-2); }
+.vs-app .vs-tile:active { transform: translateY(0); }
+.vs-app .vs-tile-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: var(--vs-glass-2); color: var(--vs-ink); }
+.vs-app .vs-tile-icon .vs-icon svg { width: 18px; height: 18px; }
+/* The tile itself is a <button>, so app.css's bare `button { white-space:
+   nowrap }` is inherited here (white-space inherits) and there is no rule on
+   .vs-tile-label overriding it — hence "Backup & Resto" clipping mid-word at
+   375px instead of wrapping. white-space is set directly on this element, so
+   it wins over the ancestor's value regardless of that rule's specificity.
+   Capped at 2 lines so a long label can't grow the tile indefinitely;
+   -webkit-box/-webkit-line-clamp is old enough to work on iOS 15. */
+.vs-app .vs-tile-label {
+  flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 500; letter-spacing: -0.005em; line-height: 1.25;
+  white-space: normal; word-break: break-word; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.vs-app .vs-tile-x { position: absolute; top: -7px; right: -7px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.35); color: var(--vs-ink); }
+.vs-app .vs-tile-x .vs-icon svg { width: 13px; height: 13px; }
+.vs-app .vs-page .vs-tile-x:hover { background: var(--vs-red-fill); }
+.vs-app .vs-empty { padding: 12px 6px; color: var(--vs-faint); font-size: 13.5px; }
+.vs-app .vs-empty.vs-empty-sub { padding-top: 0; font-size: 12.5px; }
+
+/* ---- columns: recent + stats ---------------------------------------------- */
+
+.vs-app .vs-cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-flow: dense; gap: 14px; align-items: start; }
+.vs-app .vs-card.is-small { grid-column: span 1; }
+.vs-app .vs-card.is-normal { grid-column: span 2; }
+.vs-app .vs-card.is-wide { grid-column: 1 / -1; }
+@media (max-width: 1000px) {
+  .vs-app .vs-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vs-app .vs-card.is-normal { grid-column: 1 / -1; }
+}
+.vs-app .vs-page .vs-grip { cursor: grab; touch-action: none; }
+.vs-app .vs-page .vs-grip:active { cursor: grabbing; }
+/* pan-y, not none: a swipe that starts on a tile still scrolls the page.
+   The hold-to-drag takes the gesture over by preventing touchmove. */
+.vs-app.is-editing .vs-page .vs-tile { touch-action: pan-y; cursor: grab; }
+.vs-app .vs-page .vs-tile.is-dragging { z-index: 6; opacity: 0.92; transform-origin: center; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); border-color: var(--vs-line-2); transition: none; cursor: grabbing; }
+.vs-app .vs-card.is-dragging { z-index: 6; opacity: 0.92; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); border-color: var(--vs-line-2); }
+/* Size control (edit mode) */
+.vs-app .vs-size { display: inline-flex; align-items: center; padding: 2px; border-radius: 8px; background: var(--vs-glass); border: 1px solid var(--vs-line); }
+.vs-app .vs-page .vs-size-btn { width: 26px; height: 22px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--vs-dim); display: inline-flex; align-items: center; justify-content: center; }
+.vs-app .vs-page .vs-size-btn:hover { background: var(--vs-glass-2); color: var(--vs-ink); }
+.vs-app .vs-page .vs-size-btn.is-on { background: var(--vs-ink); color: var(--vs-ground); }
+/* What each size drops so it still reads. */
+.vs-app .vs-card.is-small .vs-rwhen, .vs-app .vs-card.is-small .vs-row-sub, .vs-app .vs-card.is-small .vs-label-faint, .vs-app .vs-card.is-small .vs-budget-over { display: none; }
+.vs-app .vs-nudge.is-small .vs-rwhen { display: inline-flex; }
+.vs-app .vs-card.is-small .vs-budget-num { font-size: 26px; }
+.vs-app .vs-card.is-small .vs-gym-day { font-size: 18px; }
+.vs-app .vs-label-faint { font-weight: 500; letter-spacing: 0.04em; text-transform: none; opacity: 0.8; }
+/* Plain mode already steps down to --text-muted; a further 0.8 alpha put it at 3.5-3.9:1. */
+.vs-app.is-plain .vs-label-faint { opacity: 1; }
+
+/* Budget card */
+.vs-app .vs-budget-num { font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.vs-app .vs-budget-num.is-over { color: var(--vs-red); }
+.vs-app .vs-budget-lbl { margin-top: -4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vs-faint); }
+.vs-app .vs-meter { position: relative; height: 6px; border-radius: 3px; background: var(--vs-glass-2); overflow: hidden; margin-top: 4px; }
+.vs-app .vs-meter-fill { height: 100%; border-radius: 3px; background: var(--vs-ink); transition: width 400ms ease; }
+.vs-app .vs-meter.is-over .vs-meter-fill { background: var(--vs-red-fill); }
+.vs-app .vs-meter-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--vs-ink); }
+.vs-app .vs-budget-sub { font-size: 12.5px; color: var(--vs-dim); }
+.vs-app .vs-budget-over { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--vs-line); }
+.vs-app .vs-budget-over-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.vs-app .vs-budget-over-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vs-dim); }
+.vs-app .vs-budget-over-amt { flex: none; color: var(--vs-red); font-variant-numeric: tabular-nums; }
+.vs-app .vs-budget-over-more { font-size: 11.5px; color: var(--vs-faint); }
+
+/* Rhythm rows: a tick ring, the practice, why it is here, and its time of day. */
+.vs-app .vs-page .vs-rrow { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 9px 8px; border-radius: 12px; text-align: left; color: var(--vs-ink); }
+.vs-app .vs-page .vs-rrow:hover { background: var(--vs-glass-2); }
+/* .vs-page-scoped (0,3,0) on purpose: the page's own button reset is
+   `.vs-app .vs-page button` (0,2,1), and it wins over a bare `.vs-rtick`
+   — which is why a tick rendered as a <button> lost its size AND its ring
+   and became an invisible nothing in the Tasks and Reminders cards. */
+.vs-app .vs-page .vs-rtick { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--vs-line-2); background: transparent; color: var(--vs-ground); transition: background 140ms ease, border-color 140ms ease; }
+.vs-app .vs-rtick .vs-icon svg { width: 14px; height: 14px; stroke-width: 3; }
+.vs-app .vs-page .vs-rrow.is-done .vs-rtick { background: var(--vs-ink); border-color: var(--vs-ink); }
+.vs-app .vs-rrow.is-done .vs-row-name { text-decoration: line-through; color: var(--vs-dim); }
+.vs-app .vs-rwhen { flex: none; padding: 3px 8px; border-radius: 999px; background: var(--vs-glass-2); font-size: 11px; color: var(--vs-dim); }
+/* Every other card's when-chip is a nicety that narrow screens can drop. On
+   the Reminders card it carries the DUE DATE — the one thing a reminder is
+   for — so it outranks the width rules below and always shows. */
+.vs-app .vs-nudge .vs-rwhen { display: inline-flex; align-items: center; }
+.vs-app .vs-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px 16px 14px; border-radius: var(--vs-radius); }
+.vs-app .vs-list { display: flex; flex-direction: column; }
+.vs-app .vs-page .vs-row { display: flex; align-items: center; gap: 11px; width: 100%; min-width: 0; padding: 8px 8px; border-radius: 10px; text-align: left; color: var(--vs-ink); }
+.vs-app .vs-page .vs-row:hover { background: var(--vs-glass-2); }
+.vs-app .vs-row .vs-icon { color: var(--vs-dim); }
+.vs-app .vs-row-body { flex: 1 1 auto; min-width: 0; }
+/* A row body that IS a <button> inherits app.css's bare `button` rule —
+   inline-flex, centred, nowrap — which puts the name and the sub-line side by
+   side and clips them. `.vs-page`-scoped (0,3,1) to beat it. */
+.vs-app .vs-page button.vs-row-body { display: block; text-align: left; white-space: normal; }
+.vs-app .vs-row-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-row-sub { font-size: 11.5px; color: var(--vs-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-row-time { flex: none; font-size: 12px; color: var(--vs-faint); font-variant-numeric: tabular-nums; }
+
+.vs-app .vs-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.vs-app .vs-card.is-wide .vs-stat-grid { grid-template-columns: repeat(8, 1fr); }
+.vs-app .vs-card.is-small .vs-stat-grid { grid-template-columns: repeat(2, 1fr); }
+.vs-app .vs-page .vs-stat { display: flex; flex-direction: column; align-items: flex-start; padding: 10px 10px 9px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); text-align: left; color: var(--vs-ink); border: 1px solid transparent; }
+.vs-app.is-plain .vs-stat { background: var(--vs-glass-2); }
+.vs-app .vs-page .vs-stat.is-link:hover { background: var(--vs-glass-2); border-color: var(--vs-line); }
+.vs-app .vs-stat-value { font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vs-app .vs-stat-label { margin-top: 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--vs-faint); }
+.vs-app .vs-card-foot { padding: 2px 4px 0; font-size: 12px; color: var(--vs-faint); }
+.vs-app .vs-page .vs-inline-link { color: var(--vs-dim); text-decoration: underline; text-underline-offset: 2px; }
+.vs-app .vs-inline-link:hover { color: var(--vs-ink); }
+
+/* ---- footer --------------------------------------------------------------- */
+
+.vs-app .vs-foot { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.vs-app .vs-foot-text { font-size: 12px; color: var(--vs-faint); text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- entrance ------------------------------------------------------------- */
+
+@keyframes vs-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.vs-app .vs-page.is-enter > * { animation: vs-up 560ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.vs-app .vs-page.is-enter > :nth-child(2) { animation-delay: 60ms; }
+.vs-app .vs-page.is-enter > :nth-child(3) { animation-delay: 120ms; }
+.vs-app .vs-page.is-enter > :nth-child(4) { animation-delay: 180ms; }
+.vs-app .vs-page.is-enter > :nth-child(5) { animation-delay: 240ms; }
+@media (prefers-reduced-motion: reduce) {
+  .vs-app .vs-page.is-enter > * { animation: none; }
+  .vs-app .vs-tile, .vs-app .vs-bg, .vs-app .vs-iconbtn { transition: none; }
+}
+
+/* ---- narrow --------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .vs-app .vs-page { padding: 28px 16px 32px; gap: 18px; }
+  .vs-app .vs-head { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .vs-app .vs-greet { font-size: 28px; }
+  /* Clock+date and the weather chip share a row only when both fit. The row
+     wraps instead of letting the (nowrap) date button spill under the chip —
+     at 375px "Wednesday, 30 September" is wider than the half it was given,
+     and a tap on the end of the date opened the weather. The chip keeps the
+     right edge on either line. */
+  .vs-app .vs-head-right { order: -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; width: 100%; }
+  .vs-app .vs-head-time { max-width: 100%; }
+  .vs-app .vs-page button.vs-sub { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vs-app .vs-clock { font-size: 30px; }
+  .vs-app .vs-page button.vs-weather { margin-right: 0; margin-left: auto; max-width: 100%; }
+  .vs-app .vs-cols { grid-template-columns: minmax(0, 1fr); }
+  .vs-app .vs-card.is-small, .vs-app .vs-card.is-normal { grid-column: 1 / -1; }
+  .vs-app .vs-card.is-small .vs-rwhen, .vs-app .vs-card.is-small .vs-row-sub, .vs-app .vs-card.is-small .vs-label-faint, .vs-app .vs-card.is-small .vs-budget-over { display: revert; }
+  .vs-app .vs-card.is-small .vs-rwhen { display: none; }
+  .vs-app .vs-nudge.is-small .vs-rwhen { display: inline-flex; }
+  .vs-app .vs-card { padding: 14px 12px 12px; }
+  .vs-app .vs-stat-grid { gap: 6px; }
+  .vs-app .vs-page .vs-stat { padding: 8px 8px 7px; }
+  .vs-app .vs-stat-label { letter-spacing: 0.04em; font-size: 10px; }
+  .vs-app .vs-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .vs-app .vs-page .vs-tile { min-height: 58px; padding: 12px 12px 12px 12px; gap: 12px; }
+  .vs-app .vs-tile-icon { width: 32px; height: 32px; }
+  .vs-app .vs-stat-grid, .vs-app .vs-card.is-wide .vs-stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .vs-app .vs-stat-value { font-size: 18px; }
+  .vs-app .vs-rwhen { display: none; }
+  .vs-app .vs-nudge .vs-rwhen { display: inline-flex; }
+  .vs-app .vs-search { height: 52px; padding: 0 14px; }
+  .vs-app .vs-results { max-height: 50vh; }
+  .vs-app .vs-result-path { display: none; }
+}
+
+/* iPhone floating nav: its bar is fixed-position and overlays the bottom of
+   the leaf. app.css computes --view-bottom-spacing for it (safe-area-inset-
+   bottom + navbar height, minus any keyboard) but only applies it inside the
+   bases table — every other view, ours included, has to add it itself or
+   the capture bar/footer sit under the floating bar. Scoped to floating-nav
+   specifically (not phone in general, where the classic nav needs no pad)
+   and layered on top of the narrow breakpoint's own 32px bottom pad above. */
+.is-phone.is-floating-nav .vs-app .vs-page { padding-bottom: calc(32px + var(--view-bottom-spacing, 0px)); }
+
+/* ---- modals + settings (outside .vs-app) ---------------------------------- */
+
+.vs-modal .vs-modal-title { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
+/* TileModal (2 buttons) and ReminderModal (up to 3) share this row. At
+   375px three unshrinkable, non-wrapping buttons run past the modal's left
+   edge because flex-end packs them off-screen instead of dropping one to a
+   second line. flex-wrap fixes the overflow; buttons also need to be able
+   to shrink and their labels to wrap, or a long one (e.g. "Open in Nudge")
+   forces the row wide before it ever wraps. */
+.vs-modal .vs-modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.vs-modal .vs-modal-actions button { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; text-align: center; }
+.vs-modal .vs-btn-primary { background: var(--interactive-accent); color: var(--text-on-accent); }
+.vs-modal .vs-icon-preview { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: var(--background-modifier-hover); margin-right: 6px; }
+.vs-modal .vs-icon-preview svg { width: 18px; height: 18px; }
+.vs-modal .vs-hidden { display: none; }
+/* flex: 0 0 auto on the rows: in a column flexbox with overflow:hidden (min-height 0) a long list otherwise shrinks every row to a sliver instead of scrolling. */
+.vs-modal .vs-modal-list { display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; margin-top: 6px; }
+.vs-modal .vs-modal-item { flex: 0 0 auto; display: block; width: 100%; text-align: left; padding: 6px 8px; border-radius: 6px; background: transparent; box-shadow: none; height: auto; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-modal .vs-modal-item:hover { background: var(--background-modifier-hover); }
+.vs-modal .vs-modal-empty { color: var(--text-muted); }
+.vs-icon-row { display: flex; align-items: center; gap: 10px; }
+.vs-icon-row .vs-icon svg { width: 18px; height: 18px; }
+.vs-settings .vs-settings-note { font-size: 13px; color: var(--text-muted); margin: 0 0 10px; }
+.vs-settings .vs-settings-tile-icon { display: inline-flex; vertical-align: middle; margin-right: 8px; }
+.vs-settings .vs-settings-tile-icon svg { width: 16px; height: 16px; }

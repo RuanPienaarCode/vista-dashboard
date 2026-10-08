@@ -1,0 +1,74 @@
+# A tag push (no 'v' prefix) triggers this. Why each part is load-bearing:
+#   - permissions: contents:write creates the release; id-token + attestations mint provenance.
+#   - main.js and styles.css are NOT committed (they are build output, gitignored),
+#     so the release builds them here from the tagged src/ with the lockfile's
+#     exact esbuild — the shipped bytes are the ones attested below.
+#   - "Verify tag matches manifest version": Obsidian matches the release tag to
+#     manifest.version EXACTLY, so a mismatched tag fails before anything ships.
+#   - attest-build-provenance: lets anyone run
+#     `gh attestation verify main.js -R RuanPienaarCode/vista-dashboard`.
+#   - gh release create with the three raw assets, never a zip.
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # SHA-pinned: this workflow mints provenance with contents:write.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # `npm ci` installs exactly package-lock.json, so the bundle is reproducible.
+      - name: Build
+        run: |
+          npm ci
+          npm run build
+          node --check main.js
+
+      # The same guard suite build.sh runs locally (iOS hazards included).
+      - name: Run the guard suite
+        run: npm test
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          MANIFEST_VERSION=$(jq -r .version manifest.json)
+          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
+            echo "Tag '$TAG' does not match manifest version '$MANIFEST_VERSION'." >&2
+            echo "Obsidian matches releases to the manifest version exactly — no 'v' prefix." >&2
+            exit 1
+          fi
+          if ! jq -e --arg v "$MANIFEST_VERSION" 'has($v)' versions.json >/dev/null; then
+            echo "versions.json has no entry for '$MANIFEST_VERSION'." >&2
+            exit 1
+          fi
+
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: |
+            main.js
+            styles.css
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            --title "${GITHUB_REF#refs/tags/}" \
+            --generate-notes \
+            main.js manifest.json styles.css

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vista — preview</title>
+<!-- Obsidian's own stylesheet first, so the host cascade here is the real one. -->
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="vista.css">
+<style>
+  html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #e9e8e4;
+    --text-normal: #222; --text-muted: #666; --text-faint: #999; --background-primary: #fff; --background-secondary: #f4f4f4;
+    --background-modifier-hover: #ececec; --background-modifier-active-hover: #e2e2e2; --background-modifier-border: #ddd; --background-modifier-border-hover: #ccc;
+    --text-accent: #3b6fd9; --interactive-accent: #3b6fd9; --text-on-accent: #fff; }
+  body.theme-dark { background: #0b0b0d; --text-normal: #ddd; --text-muted: #999; --text-faint: #666; --background-primary: #1e1e1e; --background-secondary: #262626;
+    --background-modifier-hover: #2e2e2e; --background-modifier-active-hover: #363636; --background-modifier-border: #333; --background-modifier-border-hover: #444; }
+  /* .frame stands in for Obsidian's .app-container: its chain below is the
+     real one (app-container > horizontal-main-container > workspace >
+     workspace-split.mod-root > workspace-tabs > workspace-leaf >
+     workspace-leaf-content > view-content), styled by the real app.css. Do NOT
+     put a height or padding rule on .view-content here — the sizing that
+     reaches Vista must be Obsidian's own, or a collapse like the 2026-10-07
+     calc(100% - var(--view-top-spacing)) one stays invisible. */
+  .frame { position: absolute; top: 24px; right: 24px; bottom: 24px; left: 24px; max-width: 1180px; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.18); background: #fff;
+    transform: translateZ(0); /* containing block for the simulated floating nav (position: fixed) */ }
+  body.narrow .frame, body.is-mobile .frame { max-width: 390px; }
+  /* ?phone=1 / ?floatnav=1: a phone fills its screen; the viewport IS the phone. */
+  body.is-phone .frame { top: 0; right: 0; bottom: 0; left: 0; max-width: none; border-radius: 0; box-shadow: none; }
+  body.theme-dark .frame { background: #1e1e1e; }
+  /* app.css's .app-container (height/width 100%, position: relative) would fight the absolute insets */
+  body .frame.app-container { position: absolute; height: auto; width: auto; }
+  .stub-notice { position: fixed; top: 12px; right: 12px; background: #222; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; z-index: 50; }
+  /* The modal chrome comes from Obsidian's app.css (the stub builds its real
+     DOM); only the Setting rows need a stand-in here. */
+  .modal .setting-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--background-modifier-border); }
+  .modal .setting-item-name { font-size: 14px; } .modal .setting-item-description { font-size: 12px; color: var(--text-muted); }
+  .modal .setting-item-control { display: flex; align-items: center; gap: 6px; }
+  .stub-menu { position: fixed; z-index: 60; background: #fff; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.2); padding: 6px; display: flex; flex-direction: column; min-width: 180px; }
+  .stub-menu button { text-align: left; background: transparent; box-shadow: none; padding: 8px 12px; border-radius: 6px; font-size: 14px; height: auto; }
+  .stub-menu button:hover { background: #f0f0f0; }
+</style>
+</head>
+<body>
+<!-- The leaf chain below mirrors Obsidian's. app.css's iPhone floating-nav rule is
+     `.is-phone .mod-root .workspace-leaf-content .view-content`, so .mod-root
+     must be an ancestor; the leaf also needs the view-header sibling (fixed
+     under floating nav) for the flex sizing to be the real one. entry.js adds
+     the simulated mobile-navbar for ?phone=1 / ?floatnav=1. -->
+<div class="frame app-container"><div class="horizontal-main-container"><div class="workspace"><div class="workspace-split mod-vertical mod-root"><div class="workspace-tabs mod-top mod-active mod-visible"><div class="workspace-leaf mod-active"><div class="workspace-leaf-content" data-type="vista-view"><div class="view-header"><div class="view-header-title-container"><div class="view-header-title">Vista</div></div></div><div id="app" class="view-content"></div></div></div></div></div></div></div></div>
+<script>if (new URLSearchParams(location.search).get('narrow')) document.body.classList.add('narrow');</script>
+<script src="bundle.js"></script>
+</body>
+</html>
