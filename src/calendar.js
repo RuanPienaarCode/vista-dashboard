@@ -47,4 +47,14 @@ function monthGrid(iso, weekStart, today) {
   return rows;
 }
 
-module.exports = { monthGrid, weekdayRow, monthLabel, shiftMonth, monthKey, MONTHS };
+/* First and last day of the month that contains `iso`, as ISO strings: the
+   range the calendar asks Rhythm's events for. */
+function monthRange(iso) {
+  const key = monthKey(iso);
+  const first = fromISO(key + '-01');
+  if (!first) return null;
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+  return { from: key + '-01', to: todayISO(last) };
+}
+
+module.exports = { monthRange, monthGrid, weekdayRow, monthLabel, shiftMonth, monthKey, MONTHS };

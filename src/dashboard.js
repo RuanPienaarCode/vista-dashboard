@@ -16,6 +16,7 @@ const T = require('./tiles');
 const A = require('./actions');
 const { TileModal, ListModal, ReminderModal } = require('./modals');
 const RH = require('./rhythm');
+const RA = require('./rhythm-api');
 const CAL = require('./calendar');
 const BG = require('./budget');
 const TK = require('./tasks');
@@ -110,11 +111,21 @@ function taskRefusedNotice(r) {
   return 'Vista: ' + ((r && r.message) || 'could not update that task.');
 }
 
-/* The note for a Rhythm tick that did not happen. `res` is tick()'s
-   { ok:false, reason:'unreadable', key } or { ok:false, reason:'name' }. */
+/* The note for a Rhythm tick that did not happen. `res` is Rhythm's
+   practices.tick() refusal: { ok:false, reason:'unreadable', key },
+   'done-that-day', 'changed', 'name', 'bad-ref', or anything else it may say. */
 function rhythmRefusedNotice(res) {
-  if (res && res.reason === 'unreadable') return `Vista: the "${res.key}" line in today's Rhythm log is in a form Vista can't read, so it left the note alone. Tick it in Rhythm.`;
+  if (res && res.reason === 'unreadable') return `Vista: the "${res.key}" line in today's Rhythm log is in a form Rhythm can't read, so it left the note alone. Open that day's note in Rhythm/Log and fix the line.`;
+  if (res && (res.reason === 'changed' || res.reason === 'bad-ref')) return 'Vista: that practice changed in Rhythm — try again.';
+  if (res && res.reason === 'done-that-day') return 'Vista: Rhythm already has that practice done for that day.';
   return 'Vista: could not write that tick to the Rhythm log.';
+}
+
+/* What a Rhythm-backed card says when Rhythm is installed but cannot answer.
+   (Not installed at all is different: the card is hidden, not apologetic.) */
+function rhythmUnavailableText(kind, what) {
+  if (kind === 'disabled') return `Rhythm is installed but switched off. Enable it to see ${what}.`;
+  return `This version of Rhythm cannot share ${what} with Vista. Update Rhythm.`;
 }
 
 /* Rhythm ticks the card has drawn but the vault has not yet confirmed. One
@@ -152,7 +163,8 @@ function mountDashboard(view) {
     rhythm: null, rhythmPending: new Map(),
     calOpen: false, calMonth: null,
     budget: null, budgetBusy: false, budgetQueued: false,
-    tasks: null, gym: null, nudge: null, nudgeBusy: false, weather: null, weatherKey: null, weatherBusy: false, weatherQueued: false, wxOpen: false, hidden: new Set(),
+    calEvents: new Map(),
+    tasks: null, gym: null, nudge: null, nudgeBusy: false, nudgeQueued: false, weather: null, weatherKey: null, weatherBusy: false, weatherQueued: false, wxOpen: false, hidden: new Set(),
   };
   let bgLayers = [], bgFront = -1, canvas, veil, page, greetEl, subEl, vaultEl, clockEl;
   let searchWrap, searchInput, resultsEl, tilesEl, colsEl, footEl, photoLabel, calEl, weatherEl, wxEl, captureEl;
@@ -163,6 +175,14 @@ function mountDashboard(view) {
   let subscribedApi = null, budgetEpoch = 0;
   /* Newest rhythmToday() wins; and whether the first load has been started. */
   let rhythmSeq = 0, rhythmKicked = false, staleWeatherKick = null;
+  /* The Rhythm plugin builds a NEW api object each time it is reloaded; the
+     link keeps one onChange subscription on whichever instance is current
+     (src/rhythm-api.js). rhythmEpoch goes up whenever that changes, so a read
+     that began against the old instance cannot land on a card. */
+  let rhythmEpoch = 0, uiReady = false;
+  /* month -> the token of the newest events request for it. */
+  const calReq = new Map();
+  const rhythmLink = RA.createRhythmLink(app, () => onRhythmChange());
   /* The in-progress card/tile drag's own teardown, so ctl.stop() can cancel
      it if the view closes mid-gesture instead of leaving document-level
      listeners and timers behind. Only one drag runs at a time. */
@@ -516,26 +536,45 @@ function mountDashboard(view) {
     if (state.calOpen) renderCalendar();
   }
 
-  /* Days that have a journal note, and days with a Rhythm event. */
+  /* Days that have a journal note, and days with a Rhythm event. Journal
+     days come from the vault (they are Vista's own: the daily notes). Events
+     come from Rhythm's api, which answers asynchronously: the month's events
+     are cached here, drawn when they arrive, and fetched again when Rhythm
+     says something changed. Until they land the month shows no event dots. */
   function calendarMarks(monthKey) {
-    const journal = new Set(), events = new Map();
+    const journal = new Set();
     /* The same day-set capture, the Today tile and the streak use: one rule
        (src/actions.js journalDays) for which note is a day's journal. */
     for (const iso of A.journalDays(app.vault.getFiles(), settings().journalFolder).keys()) {
       if (iso.startsWith(monthKey)) journal.add(iso);
     }
-    const rs = RH.rhythmSettings(app);
-    const evFolder = app.vault.getFolderByPath(rs.folder + '/Events');
-    if (evFolder && evFolder.children) {
-      for (const f of evFolder.children) {
-        if (f.extension !== 'md') continue;
-        let fm = null;
-        try { fm = (app.metadataCache.getFileCache(f) || {}).frontmatter; } catch (e) { fm = null; }
-        const date = fm && String(fm.date || '');
-        if (date && date.startsWith(monthKey)) { if (!events.has(date)) events.set(date, []); events.get(date).push(f.basename); }
-      }
-    }
-    return { journal, events };
+    if (!state.calEvents.has(monthKey)) loadCalEvents(monthKey);
+    return { journal, events: state.calEvents.get(monthKey) || new Map() };
+  }
+
+  function loadCalEvents(monthKey, force) {
+    if (stopped || (calReq.has(monthKey) && !force)) return;
+    const api = RA.getRhythmApi(app);
+    const range = CAL.monthRange(monthKey + '-01');
+    if (!api || !range) return;
+    const token = {}, epoch = rhythmEpoch;
+    calReq.set(monthKey, token);
+    RA.eventsByDate(api, range.from, range.to).then(map => {
+      if (stopped || epoch !== rhythmEpoch || calReq.get(monthKey) !== token) return;
+      state.calEvents.set(monthKey, map);
+      if (state.calOpen && CAL.monthKey(state.calMonth || D.todayISO()) === monthKey) renderCalendar();
+    }).catch(e => {
+      console.error('vista rhythm events', e);
+    }).then(() => { if (calReq.get(monthKey) === token) calReq.delete(monthKey); });
+  }
+
+  /* Rhythm said something changed: forget every month but the one on screen
+     (kept so its dots do not blink off) and fetch that one again. */
+  function refreshCalEvents() {
+    const shown = state.calOpen ? CAL.monthKey(state.calMonth || D.todayISO()) : null;
+    for (const k of [...state.calEvents.keys()]) if (k !== shown) state.calEvents.delete(k);
+    calReq.clear();
+    if (shown) loadCalEvents(shown, true);
   }
 
   function renderCalendar() {
@@ -543,7 +582,7 @@ function mountDashboard(view) {
     clear(calEl);
     const month = state.calMonth || D.todayISO();
     const today = D.todayISO();
-    const weekStart = RH.rhythmSettings(app).weekStart;
+    const weekStart = RA.weekStart(RA.getRhythmApi(app));
     const head = el(calEl, 'div', 'vs-cal-head');
     const prev = button(head, 'vs-iconbtn vs-iconbtn-sm', null, () => { state.calMonth = CAL.shiftMonth(month, -1); renderCalendar(); }, 'chevron-left');
     prev.title = 'Previous month';
@@ -1142,10 +1181,11 @@ function mountDashboard(view) {
     } catch (e) { console.error('vista task', e); state.hidden.delete(item.path + ':' + item.raw); renderTasks(); new Notice('Vista: could not update that task.'); }
   }
 
-  /* ---- reminders, from Nudge --------------------------------------------- */
+  /* ---- reminders, from Rhythm -------------------------------------------- */
 
-  /* Everything due, topped up with what is next. Reading and ticking both go
-     through Nudge's store (src/nudge.js) — Vista never edits that note. */
+  /* Everything due, topped up with what is next. Reading, ticking and
+     snoozing all go through Rhythm's api (src/rhythm-api.js) — Vista never
+     opens the reminders note. */
   function renderNudge(card) {
     card = card || colsEl.querySelector('.vs-nudge');
     if (!card) return;
@@ -1154,13 +1194,15 @@ function mountDashboard(view) {
     const head = el(card, 'div', 'vs-card-head');
     el(head, 'span', 'vs-label', 'Reminders');
     const c = n && n.counts;
-    el(head, 'span', 'vs-label vs-label-faint', c && c.due ? `${c.overdue} overdue · ${c.today} today` : 'from Nudge');
+    el(head, 'span', 'vs-label vs-label-faint', c && c.due ? `${c.overdue} overdue · ${c.today} today` : 'from Rhythm');
     el(head, 'span', 'vs-spacer');
     editControls(head, 'nudge');
-    const add = button(head, 'vs-iconbtn vs-iconbtn-sm', null, () => A.runCommand(app, 'nudge-reminders:add'), 'plus');
-    add.title = 'Add a reminder';
-    const open = button(head, 'vs-iconbtn vs-iconbtn-sm', null, () => A.runCommand(app, 'nudge-reminders:open'), 'external-link');
-    open.title = 'Open Nudge';
+    if (!(n && n.unavailable)) {
+      const add = button(head, 'vs-iconbtn vs-iconbtn-sm', null, () => A.runCommand(app, 'rhythm:reminders-add'), 'plus');
+      add.title = 'Add a reminder';
+      const open = button(head, 'vs-iconbtn vs-iconbtn-sm', null, () => A.runCommand(app, 'rhythm:open-reminders'), 'external-link');
+      open.title = 'Open reminders in Rhythm';
+    }
     const list = el(card, 'div', 'vs-list');
     if (!n) { el(list, 'div', 'vs-empty', 'Reading reminders…'); return; }
     if (n.error) { el(list, 'div', 'vs-empty', n.error); return; }
@@ -1187,30 +1229,30 @@ function mountDashboard(view) {
     }
     const foot = el(card, 'div', 'vs-card-foot');
     const bits = [];
-    if (n.more) bits.push(`+${n.more} more in Nudge`);
+    if (n.more) bits.push(`+${n.more} more in Rhythm`);
     else if (n.counts.someday) bits.push(`${n.counts.someday} with no date`);
     foot.textContent = bits.join(' · ');
   }
 
   /* Tapping a reminder opens what the line actually says, and the few things
-     worth doing about it from here. Every write still goes through Nudge. */
+     worth doing about it from here. Every write still goes through Rhythm. */
   function openReminder(item) {
     new ReminderModal(app, item, {
       today: D.todayISO(),
       note: state.nudge && state.nudge.path,
-      canSnooze: NU.canSnooze(app),
+      canSnooze: RA.canSnooze(RA.getRhythmApi(app)),
       onDone: () => tickNudge(item),
       onSnooze: days => snoozeNudge(item, days),
       onOpenNote: () => openNudge(item),
-      onOpenNudge: () => A.runCommand(app, 'nudge-reminders:open'),
+      onOpenReminders: () => A.runCommand(app, 'rhythm:open-reminders'),
     }).open();
   }
 
   async function snoozeNudge(item, days) {
     try {
-      const res = await NU.snoozeReminder(app, item, days, D.todayISO());
-      /* A refusal says why ('changed' is not "could not find"), and the card
-         re-reads so a row that moved under us shows where it is now. */
+      const res = await RA.snoozeReminder(RA.getRhythmApi(app), item, days, D.todayISO());
+      /* A refusal says why ('changed' is not "gone"), and the card re-reads
+         so a row that moved under us shows where it is now. */
       if (!res.ok) { new Notice(NU.snoozeRefusedNotice(res)); scheduleNudge(400); return; }
       new Notice(days === 1 ? 'Snoozed to tomorrow.' : `Snoozed ${days} days.`);
     } catch (e) {
@@ -1221,25 +1263,27 @@ function mountDashboard(view) {
     scheduleNudge(400);
   }
 
+  /* Opening the note is navigation, not a read: the path is the one Rhythm
+     gave, and the workspace opens the file at the reminder's line. */
   async function openNudge(item, e) {
     const file = state.nudge && state.nudge.path ? app.vault.getFileByPath(state.nudge.path) : null;
-    if (!file) { A.runCommand(app, 'nudge-reminders:open'); return; }
+    if (!file) { A.runCommand(app, 'rhythm:open-reminders'); return; }
     const leaf = app.workspace.getLeaf(e && (e.metaKey || e.ctrlKey) ? 'tab' : A.openMode(settings()));
     await leaf.openFile(file, { eState: { line: item.line } });
   }
 
   /* The row goes as soon as it is tapped; it comes back if the write fails —
      and the note it comes back with says WHY, rather than always guessing
-     the line went missing (a repeat Nudge can't roll forward is left open
+     the line went missing (a repeat Rhythm can't roll forward is left open
      on purpose, not lost). */
   async function tickNudge(item) {
     const key = 'nudge:' + NU.keyOf(item);
     state.hidden.add(key);
     renderNudge();
     try {
-      const res = await NU.tickReminder(app, item, D.todayISO());
+      const res = await RA.tickReminder(RA.getRhythmApi(app), item, D.todayISO());
       if (!res.ok) { state.hidden.delete(key); renderNudge(); new Notice(NU.tickRefusedNotice(res)); scheduleNudge(400); return; }
-      new Notice('Done (through Nudge).');
+      new Notice('Done (through Rhythm).');
     } catch (e) {
       console.error('vista nudge tick', e);
       state.hidden.delete(key); renderNudge();
@@ -1249,18 +1293,42 @@ function mountDashboard(view) {
     scheduleNudge(400);
   }
 
+  /* Is the Reminders card on the page? It is hidden while Rhythm is absent
+     and while Rhythm has no reminders note; "unavailable" is a card with a
+     message (Rhythm installed but off, or too old). Nothing is shown until
+     the first answer is in. */
+  const nudgeShown = () => settings().showNudge !== false && !!state.nudge && state.nudge.available !== false;
+
   async function gatherNudge(force) {
-    if (state.nudgeBusy) return;
+    if (stopped) return;
+    /* A notification that lands while a read is in flight is not dropped: it
+       is queued and the read goes round again. */
+    if (state.nudgeBusy) { if (force) state.nudgeQueued = true; return; }
     if (!force && state.nudge) return;
     state.nudgeBusy = true;
+    const before = nudgeShown(), epoch = rhythmEpoch;
+    let again = false;
     try {
-      state.nudge = await NU.loadReminders(app, D.todayISO(), NUDGE_LIMIT);
+      const st = RA.rhythmStatus(app);
+      let value;
+      if (st.kind === 'ready') value = await RA.loadReminders(st.api, D.todayISO(), NUDGE_LIMIT);
+      else if (st.kind === 'absent') value = { available: false, path: '', rows: [], counts: null, more: 0 };
+      else value = { unavailable: st.kind, error: rhythmUnavailableText(st.kind, 'reminders'), path: '', rows: [], counts: null, more: 0 };
+      /* The instance changed while we were reading: this came from the old one. */
+      if (epoch !== rhythmEpoch) { again = true; return; }
+      state.nudge = value;
     } catch (e) {
       console.error('vista nudge', e);
-      state.nudge = { error: 'Could not read the reminders note. See the console.', rows: [], counts: null, more: 0 };
+      if (epoch !== rhythmEpoch) again = true;
+      else state.nudge = { error: 'Could not read the reminders from Rhythm. See the console.', rows: [], counts: null, more: 0 };
     } finally {
       state.nudgeBusy = false;
-      if (!stopped) renderNudge();
+      if (state.nudgeQueued) { state.nudgeQueued = false; again = true; }
+      if (!stopped) {
+        /* Before the first paint there is nothing to redraw: renderAll follows. */
+        if (uiReady) { if (before !== nudgeShown()) renderCols(); else if (nudgeShown()) renderNudge(); }
+        if (again) gatherNudge(true);
+      }
     }
   }
 
@@ -1438,31 +1506,38 @@ function mountDashboard(view) {
 
   /* ---- today, from Rhythm ----------------------------------------------- */
 
-  /* Reading Rhythm is asynchronous (it reads each note's text, as Rhythm does),
-     so two reads can overlap: only the newest may land, or an older one
-     finishing last would put an earlier state back on the card. */
+  /* Rhythm's api answers asynchronously, so two reads can overlap: only the
+     newest may land, or an older one finishing last would put an earlier
+     state back on the card. Not installed: no card (available false).
+     Installed but unable to answer: a card that says so (`unavailable`). */
   async function rhythmToday() {
     const seq = ++rhythmSeq;
+    const st = RA.rhythmStatus(app);
     let t;
-    try { t = await RH.todayFromRhythm(app, D.todayISO()); }
-    catch (e) { console.error('vista rhythm', e); t = { available: false, focus: [] }; }
+    if (st.kind === 'ready') {
+      try { t = await RH.todayFromRhythm(st.api, D.todayISO()); }
+      catch (e) { console.error('vista rhythm', e); t = { available: false, focus: [] }; }
+    } else if (st.kind === 'absent') t = { available: false, focus: [] };
+    else t = { available: false, unavailable: st.kind, focus: [] };
     if (seq !== rhythmSeq || stopped) return state.rhythm;
     state.rhythm = t;
     return t;
   }
 
+  /* Is the Today card on the page? */
+  const rhythmShown = () => settings().showRhythm !== false && !!state.rhythm && (!!state.rhythm.available || !!state.rhythm.unavailable);
+
   /* Re-read, then redraw: the whole column set if the card has just appeared
-     or vanished (a first practice written, the folder removed), else just the
+     or vanished (a first practice written, Rhythm switched off), else just the
      card. Entries for ticks whose write had already landed when the read began
      are dropped afterwards — the read now includes them. */
   async function refreshRhythm() {
-    const before = !!(state.rhythm && state.rhythm.available);
+    const before = rhythmShown();
     const settled = settledPending(state.rhythmPending);
     await rhythmToday();
     if (stopped) return;
     dropSettled(state.rhythmPending, settled);
-    const after = !!(state.rhythm && state.rhythm.available);
-    if (before !== after && settings().showRhythm !== false) renderCols(); else renderRhythm();
+    if (before !== rhythmShown()) renderCols(); else renderRhythm();
   }
 
   function renderRhythm(card) {
@@ -1476,6 +1551,11 @@ function mountDashboard(view) {
     el(head, 'span', 'vs-label vs-label-faint', 'from Rhythm');
     el(head, 'span', 'vs-spacer');
     editControls(head, 'rhythm');
+    if (t.unavailable) {
+      const ul = el(card, 'div', 'vs-list');
+      el(ul, 'div', 'vs-empty', rhythmUnavailableText(t.unavailable, 'practices'));
+      return;
+    }
     const open = button(head, 'vs-iconbtn vs-iconbtn-sm', null, () => A.runCommand(app, 'rhythm:open'), 'external-link');
     open.title = 'Open Rhythm';
     const list = el(card, 'div', 'vs-list');
@@ -1490,7 +1570,7 @@ function mountDashboard(view) {
       }
     }
     for (const r of rows) {
-      const row = button(list, 'vs-rrow' + (r.done ? ' is-done' : ''), null, () => tickRhythm(r.name, !r.done));
+      const row = button(list, 'vs-rrow' + (r.done ? ' is-done' : ''), null, () => tickRhythm(r, !r.done));
       row.setAttribute('aria-pressed', r.done ? 'true' : 'false');
       const tickEl = el(row, 'span', 'vs-rtick');
       if (r.done) icon(tickEl, 'check');
@@ -1509,16 +1589,21 @@ function mountDashboard(view) {
     foot.textContent = bits.join(' · ');
   }
 
-  async function tickRhythm(name, on) {
+  /* `row` is the focus row as Rhythm gave it; its `ref` goes straight back
+     and Rhythm re-checks it before it writes. */
+  async function tickRhythm(row, on) {
+    const name = row.name;
     const entry = { on, settled: false };
     state.rhythmPending.set(name, entry);
     renderRhythm();
     const undo = () => { if (state.rhythmPending.get(name) === entry) state.rhythmPending.delete(name); renderRhythm(); };
     try {
-      const res = await RH.tick(app, D.todayISO(), name, on);
+      const res = await RH.tickPractice(RA.getRhythmApi(app), row, on);
       if (!res.ok) {
         new Notice(rhythmRefusedNotice(res));
         undo();
+        /* 'changed': the row is stale, show what Rhythm has now. */
+        if (res.reason === 'changed' || res.reason === 'bad-ref' || res.reason === 'done-that-day') scheduleRhythm();
         return;
       }
     } catch (e) {
@@ -1528,7 +1613,8 @@ function mountDashboard(view) {
       return;
     }
     entry.settled = true;
-    /* The metadata cache catches up a moment after the write. */
+    /* Rhythm tells us when it has written (api.onChange); this read is the
+       one that drops the settled overlay even if that notice came first. */
     if (rhythmTimer) clearTimeout(rhythmTimer);
     rhythmTimer = setTimeout(() => { rhythmTimer = null; if (!stopped) refreshRhythm(); }, 900);
   }
@@ -1538,11 +1624,35 @@ function mountDashboard(view) {
     rhythmTimer = setTimeout(() => { rhythmTimer = null; if (!stopped) refreshRhythm(); }, 700);
   }
 
-  /* Is this path inside the Rhythm folder? Rhythm writes its own log (and the
-     user edits practices by hand); either must refresh the card. */
-  function inRhythmFolder(path) {
-    const folder = (state.rhythm && state.rhythm.folder) || RH.rhythmSettings(app).folder;
-    return !!path && path.startsWith(folder + '/');
+  /* ---- Rhythm told us something changed (api.onChange) ------------------- */
+
+  /* Reminders, practices or events moved: by Rhythm, by hand, or by sync.
+     Rhythm debounces; Vista just re-reads what is on screen. */
+  function onRhythmChange() {
+    if (stopped) return;
+    scheduleRhythm();
+    if (settings().showNudge !== false) scheduleNudge(300);
+    refreshCalEvents();
+  }
+
+  /* The Rhythm plugin may have been reloaded, switched off or on, or
+     installed since the last look. When the instance (or the kind of
+     nothing there is) changed: forget everything read through the old one,
+     read again, redraw. Returns whether it changed. */
+  function syncRhythm() {
+    if (!rhythmLink.sync()) return false;
+    rhythmEpoch++; rhythmSeq++;
+    state.rhythm = null; state.rhythmPending.clear();
+    state.nudge = null;
+    state.hidden = new Set([...state.hidden].filter(k => k.slice(0, 6) !== 'nudge:'));
+    state.calEvents.clear(); calReq.clear();
+    return true;
+  }
+
+  function onRhythmSwapped() {
+    rhythmToday().then(() => { if (!stopped) renderCols(); });
+    gatherNudge(true);
+    if (state.calOpen) renderCalendar();
   }
 
   /* ---- recent + stats --------------------------------------------------- */
@@ -1566,19 +1676,20 @@ function mountDashboard(view) {
   function renderCols() {
     clear(colsEl);
     const s = settings();
-    /* Rhythm is read asynchronously, so the card is decided from what has been
-       read. The first read is started here if nothing has started it (start()
-       normally has, and waits briefly for it, so the card is there on first
-       paint); when it lands the columns are drawn again. */
+    /* Rhythm is read asynchronously, so the cards are decided from what has
+       been read. The first reads are started here if nothing has started them
+       (start() normally has, and waits briefly for them, so the cards are
+       there on first paint); when one lands the columns are drawn again. */
     if (state.rhythm === null && !rhythmKicked && s.showRhythm !== false) {
       rhythmKicked = true;
       rhythmToday().then(() => { if (!stopped) renderCols(); });
     }
-    const showRhythm = s.showRhythm !== false && !!(state.rhythm && state.rhythm.available);
+    if (state.nudge === null && !state.nudgeBusy && s.showNudge !== false) gatherNudge(false);
+    const showRhythm = rhythmShown();
     const showBudget = showBudgetCard(app, s);
     const showTasks = s.showTasks !== false;
     const showGym = s.showGym !== false && !!app.vault.getFolderByPath((s.gymFolder || 'Gym').replace(/^\/+|\/+$/g, '') + '/Plans');
-    const showNudge = s.showNudge !== false && NU.nudgeAvailable(app);
+    const showNudge = nudgeShown();
     const show = { budget: showBudget, rhythm: showRhythm, tasks: showTasks, nudge: showNudge, gym: showGym, recent: s.showRecent !== false, stats: s.showStats !== false };
     const render = { budget: () => { renderBudget(sizedCard('budget', 'vs-budget')); gatherBudget(false); }, rhythm: () => renderRhythm(sizedCard('rhythm', 'vs-rhythm')), tasks: () => renderTasks(sizedCard('tasks', 'vs-tasks')), nudge: () => { renderNudge(sizedCard('nudge', 'vs-nudge')); gatherNudge(false); }, gym: () => renderGym(sizedCard('gym', 'vs-gym')), recent: () => renderRecent(sizedCard('recent', 'vs-recent')), stats: () => renderStats(sizedCard('stats', 'vs-stats')) };
     for (const key of widgetOrder()) if (show[key]) render[key]();
@@ -1691,7 +1802,8 @@ function mountDashboard(view) {
       plugin._statsCache = { stats, at: Date.now() };
       /* A reminder is one task line, and the Reminders card is already
          showing it — two cards saying the same thing is worse than either. */
-      const owned = settings().showNudge !== false && NU.nudgeAvailable(app) ? new Set([NU.nudgePath(app)]) : null;
+      const notePath = settings().showNudge !== false ? RA.reminderNotePath(RA.getRhythmApi(app)) : '';
+      const owned = notePath ? new Set([notePath]) : null;
       state.tasks = TK.scanTasks(texts, D.todayISO(), settings().tasksGlobalFilter, owned);
       state.hidden = new Set();
       state.gym = GY.gymFromTexts(texts, settings().gymFolder, D.todayISO());
@@ -1841,7 +1953,7 @@ function mountDashboard(view) {
   }
 
   /* renderHeader() runs every 15s, but everything else on the page is drawn
-     once and left — Rhythm, Tasks, Gym, Nudge, Budget and the calendar's
+     once and left — Rhythm, Tasks, Gym, Reminders, Budget and the calendar's
      "today" all freeze at whatever day it was when they were last rendered.
      Left open across midnight, every one of those reads as yesterday: a
      rhythm tick would even write into TODAY's log for a practice that was
@@ -1852,6 +1964,7 @@ function mountDashboard(view) {
     rhythmToday().then(() => { if (!stopped) renderCols(); });
     gatherStats(true);
     gatherNudge(true);
+    state.calEvents.clear(); calReq.clear();
     gatherBudget(true);
     if (state.calOpen) { state.calMonth = D.todayISO(); renderCalendar(); }
     loadWeather(false);
@@ -1873,24 +1986,30 @@ function mountDashboard(view) {
     async start() {
       buildShell();
       buildIndex();
-      /* Rhythm decides whether its card exists, and reading it is async: give
-         it a short head start so the card is on the first paint instead of
-         popping in (and shifting the others) a moment later. If the read is
-         slow the page draws without it and the columns are redrawn when it
-         lands (renderCols' own kick covers that, via rhythmKicked). */
-      if (settings().showRhythm !== false) {
+      /* Take the Rhythm api (and its onChange) before the first read, so the
+         first read and the subscription are on the same instance. */
+      syncRhythm();
+      /* Rhythm decides whether the Today and Reminders cards exist, and asking
+         it is async: give both a short head start so they are on the first
+         paint instead of popping in (and shifting the others) a moment later.
+         If the reads are slow the page draws without them and the columns are
+         redrawn when they land (renderCols' own kick covers that). */
+      if (settings().showRhythm !== false || settings().showNudge !== false) {
         rhythmKicked = true;
         let painted = false, cap = null;
-        const read = rhythmToday().then(() => { if (painted && !stopped) renderCols(); });
-        await Promise.race([read, new Promise(r => { cap = setTimeout(r, 600); })]);
+        const reads = [];
+        if (settings().showRhythm !== false) reads.push(rhythmToday().then(() => { if (painted && !stopped) renderCols(); }));
+        if (settings().showNudge !== false) reads.push(gatherNudge(true));
+        await Promise.race([Promise.all(reads), new Promise(r => { cap = setTimeout(r, 600); })]);
         clearTimeout(cap);
         painted = true;
         if (stopped) return;
       }
       renderAll();
-      /* A new, deleted or renamed file can change the search index; a Rhythm
-         file, the Rhythm card. */
-      const onVault = file => { state.entries = []; scheduleStats(); if (file && inRhythmFolder(file.path)) scheduleRhythm(); };
+      uiReady = true;
+      /* A new, deleted or renamed file can change the search index. (Planner
+         notes are Rhythm's: it tells us through api.onChange.) */
+      const onVault = () => { state.entries = []; scheduleStats(); };
       if (view.registerEvent) {
         view.registerEvent(app.vault.on('create', onVault));
         view.registerEvent(app.vault.on('delete', onVault));
@@ -1899,18 +2018,12 @@ function mountDashboard(view) {
           scheduleStats();
           if (!file || !file.path) return;
           if (file.path.startsWith((settings().budgetFolder || '') + '/')) scheduleBudget();
-          /* Nudge writing its own note, or the user editing it by hand. */
-          if (file.path === NU.nudgePath(app)) scheduleNudge();
-          /* Rhythm writes its own log; the loader reads note TEXT, so a
-             modify (not only a metadata change) is what tells us to re-read. */
-          if (inRhythmFolder(file.path)) scheduleRhythm();
         }));
-        if (app.metadataCache && app.metadataCache.on) view.registerEvent(app.metadataCache.on('changed', file => {
+        if (app.metadataCache && app.metadataCache.on) view.registerEvent(app.metadataCache.on('changed', () => {
           /* A note's aliases may have changed: the search index holds them, so
              mark it dirty. It is rebuilt on the next search, not on every
              keystroke of an edit elsewhere. */
           state.entries = [];
-          if (file && inRhythmFolder(file.path)) scheduleRhythm();
         }));
         if (app.workspace && app.workspace.on) view.registerEvent(app.workspace.on('file-open', () => { if (!stopped) renderRecent(); }));
         /* Coming back to the app (mobile especially) doesn't always pass
@@ -1926,6 +2039,8 @@ function mountDashboard(view) {
         renderHeader(); checkDateRollover();
         /* The Budget plugin may have been reloaded since the last read. */
         if (syncBudgetApi() && settings().showBudget !== false) { renderBudget(); gatherBudget(true); }
+        /* ...and so may the Rhythm plugin (reloaded, switched off or on). */
+        if (syncRhythm()) onRhythmSwapped();
       }, 15000));
       if (view.registerInterval) view.registerInterval(window.setInterval(() => { if (!stopped) loadWeather(false); }, 10 * 60 * 1000));
       if (typeof document !== 'undefined' && document.addEventListener) {
@@ -1946,6 +2061,7 @@ function mountDashboard(view) {
       if (typeof unsubscribeBudgetApi === 'function') { try { unsubscribeBudgetApi(); } catch (e) { /* the Budget plugin may already be gone */ } unsubscribeBudgetApi = null; }
       plugin._budgetCache = budgetCacheAfterStop(plugin._budgetCache);
       if (nudgeTimer) clearTimeout(nudgeTimer);
+      rhythmLink.stop();
       root.classList.remove('vs-app', 'is-plain');
       clear(root);
     },

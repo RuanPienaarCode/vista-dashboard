@@ -44,7 +44,7 @@ const DEFAULT_SETTINGS = {
   /* Tasks due today and overdue (Tasks plugin emoji dates). */
   showTasks: true,
   tasksGlobalFilter: '',
-  /* Reminders due, read through the Nudge plugin's own store. */
+  /* Reminders due, read through the Rhythm plugin's api. */
   showNudge: true,
   /* The next session from the Gym plugin's plans. The card appears only when
      <gymFolder>/Plans exists; 'Gym' is that plugin's own default folder. */
