@@ -115,7 +115,7 @@ function taskRefusedNotice(r) {
    practices.tick() refusal: { ok:false, reason:'unreadable', key },
    'done-that-day', 'changed', 'name', 'bad-ref', or anything else it may say. */
 function rhythmRefusedNotice(res) {
-  if (res && res.reason === 'unreadable') return `Vista: the "${res.key}" line in today's Rhythm log is in a form Rhythm can't read, so it left the note alone. Tick it in Rhythm.`;
+  if (res && res.reason === 'unreadable') return `Vista: the "${res.key}" line in today's Rhythm log is in a form Rhythm can't read, so it left the note alone. Open that day's note in Rhythm/Log and fix the line.`;
   if (res && (res.reason === 'changed' || res.reason === 'bad-ref')) return 'Vista: that practice changed in Rhythm — try again.';
   if (res && res.reason === 'done-that-day') return 'Vista: Rhythm already has that practice done for that day.';
   return 'Vista: could not write that tick to the Rhythm log.';
