@@ -1,7 +1,9 @@
 'use strict';
 /* Guards the seams between src/dashboard.js and the modules whose APIs changed
-   in the 2026-10-07 fix wave (async Rhythm, result objects from Tasks / Rhythm /
-   Nudge, the per-device weather cache, the Budget instance sync). mountDashboard
+   in the 2026-10-07 fix wave (async Rhythm, result objects from Tasks / Rhythm,
+   the per-device weather cache, the Budget instance sync) and the move of every
+   reminder / practice / event read onto the Rhythm api (the mounted card
+   paths are tests/dashboard-cards.test.cjs). mountDashboard
    needs a DOM, so the DOM behaviour is proved in the browser harness; what can
    be decided without one is pinned here, plus source-shape guards that fail if
    a call site goes back to the old contract. */
@@ -87,6 +89,8 @@ const violations = src => {
   if (/_budgetCache;\s*if \(!force && cached && Date\.now\(\) - cached\.at/.test(src)) out.push('budget cache tested by age alone');
   if (/W\.todayHiLo\(/.test(src)) out.push('header H/L not from forecastView');
   if (/could not find that reminder/.test(src)) out.push('snooze refusal hard-codes "could not find"');
+  if (/nudge-reminders|rhythmSettings|NU\.nudge[A-Z]|NU\.(load|tick|snooze)Reminder/.test(src)) out.push('reaches into Nudge / Rhythm settings instead of the Rhythm api');
+  if (/getFolderByPath\([^)]*Events/.test(src)) out.push('calendar reads the Events folder itself');
   return out;
 };
 assert.deepStrictEqual(violations(SRC), [], 'dashboard.js honours the new module contracts');
@@ -103,6 +107,8 @@ const bad = {
   'budget cache tested by age alone': 'const cached = plugin._budgetCache;\n    if (!force && cached && Date.now() - cached.at < STATS_FRESH_MS)',
   'header H/L not from forecastView': 'const hl = W.todayHiLo(w, D.todayISO());',
   'snooze refusal hard-codes "could not find"': "new Notice('Vista: Nudge could not find that reminder')",
+  'reaches into Nudge / Rhythm settings instead of the Rhythm api': "A.runCommand(app, 'nudge-reminders:add'); const w = RH.rhythmSettings(app).weekStart;",
+  'calendar reads the Events folder itself': "const evFolder = app.vault.getFolderByPath(rs.folder + '/Events');",
 };
 for (const [want, snippet] of Object.entries(bad)) assert.ok(violations(snippet).includes(want), `guard catches: ${want}`);
 
