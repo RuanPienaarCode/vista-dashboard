@@ -11,13 +11,13 @@
 #   RHYTHM_REF=<commit|branch> scripts/...      that ref instead (also as the first argument)
 #   RHYTHM_REF=working scripts/...              the checkout's working tree (it may be mid-edit
 #                                               in another session - expect false drift)
-#   RHYTHM_REPO=<path>                          the checkout (default ~/Github/rhythm-vault)
+#   RHYTHM_REPO=<path>                          the checkout (default ~/Dev/Obsidian Plugins/rhythm-vault)
 # To re-vendor: copy the three files over from the new ref, re-apply the one
 # require line in rhythm-model.js, then move PINNED_REF to that ref.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PINNED_REF="bdeae92"   # the Rhythm audit commit (branch fix/audit-2026-09-27) these files were vendored from
-RHYTHM="${RHYTHM_REPO:-$HOME/Github/rhythm-vault}"
+RHYTHM="${RHYTHM_REPO:-$HOME/Dev/Obsidian Plugins/rhythm-vault}"
 REF="${1:-${RHYTHM_REF:-$PINNED_REF}}"
 [ -d "$RHYTHM/src" ] || { echo "No Rhythm checkout at $RHYTHM (set RHYTHM_REPO)"; exit 0; }
 LOCAL_REQUIRE="const D = require('./rhythm-dates'); // VENDORED: upstream requires './dates' - the one edit; scripts/check-rhythm-vendor.sh"

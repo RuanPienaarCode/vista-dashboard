@@ -49,4 +49,4 @@ Preview URL parameters: `?photo=<file>` `?effect=leaves` `?bg=gradient|none` `?t
 
 ## Licence
 
-AGPL-3.0-only. `src/rhythm-model.js` and `src/rhythm-dates.js` are vendored verbatim from the [Rhythm](https://github.com/RuanPienaarCode/life-rhythm) plugin's source so the "Today" card agrees with Rhythm exactly; update them together. The one edit is `rhythm-model.js`'s `require('./rhythm-dates')` (upstream `'./dates'`), marked `VENDORED` on that line. `scripts/check-rhythm-vendor.sh` reports any other drift against a local Rhythm checkout (`RHYTHM_REPO`, default `~/Github/rhythm-vault`).
+AGPL-3.0-only. `src/rhythm-model.js` and `src/rhythm-dates.js` are vendored verbatim from the [Rhythm](https://github.com/RuanPienaarCode/life-rhythm) plugin's source so the "Today" card agrees with Rhythm exactly; update them together. The one edit is `rhythm-model.js`'s `require('./rhythm-dates')` (upstream `'./dates'`), marked `VENDORED` on that line. `scripts/check-rhythm-vendor.sh` reports any other drift against a local Rhythm checkout (`RHYTHM_REPO`, default `~/Dev/Obsidian Plugins/rhythm-vault`).
