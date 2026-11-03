@@ -622,6 +622,32 @@
 .vs-app .vs-ai-body h1, .vs-app .vs-ai-body h2, .vs-app .vs-ai-body h3, .vs-app .vs-ai-body h4 { font-size: 14px; font-weight: 600; margin: 10px 0 4px; color: var(--vs-ink); }
 .vs-app .vs-ai-body a { color: var(--vs-accent); }
 .vs-app .vs-ai-body code { font-size: 12.5px; background: var(--vs-glass-2); padding: 1px 4px; border-radius: 4px; }
+/* What Obsidian's renderer draws, styled here: app.css styles most of it
+   only under .markdown-rendered, which the bubble deliberately is not (its
+   colours would follow the note theme, not the glass). */
+.vs-app .vs-ai-body pre { position: relative; margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: pre; }
+.vs-app .vs-ai-body pre code { background: none; padding: 0; border-radius: 0; font-size: 12.5px; }
+.vs-app .vs-ai .vs-ai-body button.copy-code-button { position: absolute; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; color: var(--vs-faint); opacity: 0.8; }
+.vs-app .vs-ai .vs-ai-body button.copy-code-button svg { width: 14px; height: 14px; }
+.vs-app .vs-ai-body blockquote { margin: 0 0 8px; padding: 2px 0 2px 10px; border-left: 3px solid var(--vs-line-2); color: var(--vs-dim); }
+.vs-app .vs-ai-body blockquote > :last-child { margin-bottom: 0; }
+.vs-app .vs-ai-body table { border-collapse: collapse; margin: 0 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; display: block; max-width: 100%; overflow-x: auto; }
+.vs-app .vs-ai-body th, .vs-app .vs-ai-body td { padding: 4px 10px; border-bottom: 1px solid var(--vs-line); text-align: left; }
+.vs-app .vs-ai-body th[align="right"], .vs-app .vs-ai-body td[align="right"] { text-align: right; }
+.vs-app .vs-ai-body th[align="center"], .vs-app .vs-ai-body td[align="center"] { text-align: center; }
+.vs-app .vs-ai-body th { font-weight: 600; color: var(--vs-ink); border-bottom-color: var(--vs-line-2); }
+.vs-app .vs-ai-body th:first-child, .vs-app .vs-ai-body td:first-child { padding-left: 0; }
+.vs-app .vs-ai-body tr:last-child td { border-bottom: 0; }
+.vs-app .vs-ai-body hr { border: 0; border-top: 1px solid var(--vs-line); margin: 10px 0; height: 0; }
+/* app.css hangs a dark arrow icon off .external-link; on the glass it is an
+   invisible gap before the next character. */
+.vs-app .vs-ai-body a.external-link { background-image: none; padding-right: 0; }
+/* A checklist in an answer is only text: the boxes show state, never toggle. */
+.vs-app .vs-ai-body ul.contains-task-list { padding-left: 2px; list-style: none; }
+.vs-app .vs-ai-body .task-list-item { list-style: none; }
+.vs-app .vs-ai-body .task-list-item-checkbox { pointer-events: none; margin: 0 6px 0 0; vertical-align: -2px; width: 14px; height: 14px; }
+.vs-app .vs-ai-body .callout { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; }
+.vs-app .vs-ai-body .callout-content > :last-child { margin-bottom: 0; }
 .vs-app .vs-ai-tools { display: flex; align-items: center; gap: 2px; margin: 4px -6px 0; }
 .vs-app .vs-ai .vs-ai-tool { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 7px; font-size: 12px; color: var(--vs-faint); }
 .vs-app .vs-ai .vs-ai-tool .vs-icon, .vs-app .vs-ai .vs-ai-tool .vs-icon svg { width: 13px; height: 13px; }

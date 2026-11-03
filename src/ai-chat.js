@@ -26,8 +26,10 @@ const A = require('./actions');
    stripped before rendering (safeAnswer), and anything that still carries a
    remote source after rendering is removed here as a second layer. */
 const REMOTE_TAGS = 'img, iframe, video, audio, source, embed, object, picture, link';
-function stripRemote(node) {
+function tameAnswer(node) {
   if (!node || typeof node.querySelectorAll !== 'function') return;
+  /* An answer's checklist shows state; ticking it would change nothing. */
+  for (const box of node.querySelectorAll('input[type="checkbox"]')) { box.disabled = true; box.tabIndex = -1; }
   for (const n of [...node.querySelectorAll(REMOTE_TAGS)]) {
     const alt = n.getAttribute && n.getAttribute('alt');
     if (alt && n.parentNode) n.parentNode.insertBefore(document.createTextNode(alt), n);
@@ -122,8 +124,8 @@ function mountAskAI(o) {
     if (md && MarkdownRenderer && typeof MarkdownRenderer.render === 'function') {
       try {
         const done = MarkdownRenderer.render(app, safe, into, '', md);
-        stripRemote(into);
-        if (done && typeof done.then === 'function') done.then(() => stripRemote(into), () => {});
+        tameAnswer(into);
+        if (done && typeof done.then === 'function') done.then(() => tameAnswer(into), () => {});
         return;
       } catch (e) { clear(into); }
     }
@@ -309,4 +311,4 @@ function mountAskAI(o) {
   };
 }
 
-module.exports = { mountAskAI, stripRemote };
+module.exports = { mountAskAI, tameAnswer };
