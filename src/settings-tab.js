@@ -1,7 +1,7 @@
 'use strict';
 /* Settings tab. */
 
-const { PluginSettingTab, Setting, Notice, normalizePath, requestUrl } = require('obsidian');
+const { PluginSettingTab, Setting, Notice, Platform, normalizePath, requestUrl } = require('obsidian');
 const { el, icon } = require('./dom');
 const { GRADIENTS, listPhotos, photoTitle } = require('./background');
 const { TYPES, LEAF_PALETTES, leafPalette } = require('./effects');
@@ -181,6 +181,11 @@ class VistaSettingTab extends PluginSettingTab {
   /* The Ask AI section. Which AI and its key or app path belong to this
      device (plugin.aiDevice); the model per AI and the chats folder sync. */
   displayAskAI(containerEl, s, save) {
+    if (Platform && Platform.isMobile) {
+      new Setting(containerEl).setName('Ask AI').setHeading();
+      el(containerEl, 'p', 'vs-settings-note', 'Ask AI is on your computer only. It does not appear on a phone or tablet.');
+      return;
+    }
     const plugin = this.plugin;
     const runner = plugin.aiRunner();
     const dev = plugin.aiDevice();

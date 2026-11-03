@@ -105,4 +105,12 @@ function journalEntry(question, answer) {
   return `Ask AI${q ? ': ' + q : ''}\n${a}`;
 }
 
-module.exports = { PAGE_MAX, tidyText, safeAnswer, systemPrompt, chatNoteName, chatMarkdown, journalEntry };
+/* Ask AI is a computer feature: on a phone or tablet there is no button,
+   no chat and no command, whatever the synced setting says (Ruan's call,
+   3 Nov 2026). platform: Obsidian's Platform. */
+function askAIOn(settings, platform) {
+  if (platform && platform.isMobile) return false;
+  return !settings || settings.showAskAI !== false;
+}
+
+module.exports = { PAGE_MAX, askAIOn, tidyText, safeAnswer, systemPrompt, chatNoteName, chatMarkdown, journalEntry };

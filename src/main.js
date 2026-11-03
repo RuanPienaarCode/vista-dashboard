@@ -7,7 +7,7 @@
    main.js (target safari15 — the real engine floor on mobile).
    ============================================================================ */
 
-const { Plugin } = require('obsidian');
+const { Plugin, Platform } = require('obsidian');
 const { VIEW_TYPE, DEFAULT_SETTINGS } = require('./constants');
 const { VistaView } = require('./view');
 const { VistaSettingTab } = require('./settings-tab');
@@ -26,7 +26,8 @@ class VistaPlugin extends Plugin {
       name: 'Search from the dashboard',
       callback: async () => { await this.activateView(); this.forEachView(c => c.focusSearch()); },
     });
-    this.addCommand({
+    /* Ask AI is computer only: no command on a phone or tablet. */
+    if (!(Platform && Platform.isMobile)) this.addCommand({
       id: 'ask-ai',
       name: 'Ask AI about the dashboard',
       callback: async () => { await this.activateView(); this.forEachView(c => c.askAI()); },

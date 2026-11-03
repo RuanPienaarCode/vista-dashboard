@@ -55,4 +55,11 @@ assert.strictEqual(C.safeAnswer('a <img src="https://evil.test/x.png" alt="y"> b
 assert.strictEqual(C.safeAnswer('see ![[Secret note]] and ![[pic.png|200]]'), 'see [[Secret note]] and [[pic.png|200]]');
 assert.strictEqual(C.safeAnswer('[a link](https://ok.test) stays'), '[a link](https://ok.test) stays');
 
+/* computer only: never on a phone or tablet, whatever the synced setting */
+assert.strictEqual(C.askAIOn({ showAskAI: true }, { isMobile: true }), false);
+assert.strictEqual(C.askAIOn({}, { isMobile: true }), false);
+assert.strictEqual(C.askAIOn({}, { isMobile: false }), true);
+assert.strictEqual(C.askAIOn({ showAskAI: false }, { isMobile: false }), false);
+assert.strictEqual(C.askAIOn({ showAskAI: true }, {}), true);
+
 console.log('ai context OK');

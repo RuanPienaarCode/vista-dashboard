@@ -24,6 +24,7 @@ const NU = require('./nudge');
 const GY = require('./gym');
 const W = require('./weather');
 const { mountAskAI } = require('./ai-chat');
+const { askAIOn } = require('./ai-context');
 
 const RESULT_LIMIT = 8;
 const CONTENT_LIMIT = 4;
@@ -1954,7 +1955,7 @@ function mountDashboard(view) {
   }
 
   function syncAskAI() {
-    const want = settings().showAskAI !== false;
+    const want = askAIOn(settings(), Platform);
     if (want && !askAI) askAI = mountAskAI({ app, plugin, root, readPage });
     else if (!want && askAI) { askAI.stop(); askAI = null; }
     else if (askAI) askAI.refresh();
