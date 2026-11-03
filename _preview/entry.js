@@ -119,7 +119,7 @@ const TEXT = 'Part of [[Home]].\n\n- [ ] plan the week\n- [x] call the bank\n\nA
 
 const NUDGE_PATH = 'Reminders.md';
 const PRIO = { '🔺': 'highest', '⏫': 'high', '🔼': 'medium', '🔽': 'low', '⏬': 'lowest' };
-function makeNudgeStore() {
+function makeRhythmApi() {
   const parse = text => {
     const out = [];
     let group = '';
@@ -143,30 +143,79 @@ function makeNudgeStore() {
     }
     return out;
   };
+  /* The Rhythm plugin's headless api (apiVersion 1), played in memory: the
+     same calls Vista makes (reminders.summary/toggle/snooze/notePath,
+     practices.today/tick, events.between, weekStart, onChange), every ref
+     opaque and re-checked before a write. A harness, not a spec. */
+  const NU = require('../src/nudge');
+  const refOf = it => 'rem:' + it.line + ':' + it.raw;
+  const withRef = it => Object.assign({}, it, { ref: refOf(it) });
+  const listeners = new Set();
+  const fire = () => setTimeout(() => { for (const cb of [...listeners]) cb(); }, 30);
+  const locate = ref => parse(TEXTS.get(NUDGE_PATH) || '').find(it => refOf(it) === ref) || null;
+  const PRACTICES = Object.keys(RHYTHM_FM).filter(k => RHYTHM_FM[k].rhythm === 'practice');
+  const WHEN = { morning: 'Morning', day: 'Day', evening: 'Evening' };
+  const logPath = d => `Rhythm/Log/${d}.md`;
+  const doneOn = d => { const l = fmFromText(TEXTS.get(logPath(d)) || ''); return Array.isArray(l.done) ? l.done : []; };
+  const EVENTS = [
+    { name: 'Dentist', date: iso(now + 2 * 86400000), time: '09:00', area: 'Health', path: 'Rhythm/Events/Dentist.md' },
+    { name: 'Book club', date: iso(now + 6 * 86400000), time: '19:00', area: 'Home', path: 'Rhythm/Events/Book club.md' },
+  ];
   return {
-    path: () => NUDGE_PATH,
-    load: async () => ({ text: TEXTS.get(NUDGE_PATH) || '', items: parse(TEXTS.get(NUDGE_PATH) || '') }),
-    snooze: async (item, days, today) => {
-      const lines = (TEXTS.get(NUDGE_PATH) || '').split('\n');
-      const at = lines.indexOf(item.raw);
-      if (at === -1) return { ok: false };
-      const due = iso(Date.parse(today + 'T00:00:00Z') + days * 86400000);
-      lines[at] = /📅\s*\d{4}-\d{2}-\d{2}/.test(lines[at])
-        ? lines[at].replace(/(📅\s*)\d{4}-\d{2}-\d{2}/, '$1' + due)
-        : lines[at].trimEnd() + ' 📅 ' + due;
-      TEXTS.set(NUDGE_PATH, lines.join('\n'));
-      console.log('[nudge snooze]', item.title, '→', due);
-      return { ok: true };
+    apiVersion: 1,
+    onChange(cb) { listeners.add(cb); return () => listeners.delete(cb); },
+    weekStart: () => 1,
+    reminders: {
+      notePath: () => NUDGE_PATH,
+      async summary({ today, limit }) {
+        const items = parse(TEXTS.get(NUDGE_PATH) || '');
+        const open = items.filter(i => !i.done);
+        const by = { overdue: [], today: [], tomorrow: [], week: [], later: [], someday: [] };
+        for (const i of open) by[NU.bucketOf(i, today)].push(i);
+        for (const k of Object.keys(by)) by[k] = NU.sortItems(by[k]);
+        const n = Math.max(1, limit || 5);
+        const due = [...by.overdue, ...by.today], ahead = [...by.tomorrow, ...by.week, ...by.later];
+        const rows = due.slice(0, n);
+        if (rows.length < n) rows.push(...ahead.slice(0, n - rows.length));
+        return { available: true, path: NUDGE_PATH, rows: rows.map(withRef), buckets: by, counts: { overdue: by.overdue.length, today: by.today.length, due: due.length, ahead: ahead.length, someday: by.someday.length, open: open.length }, more: Math.max(0, open.length - rows.length) };
+      },
+      async snooze(ref, days, { today }) {
+        const item = locate(ref);
+        if (!item) return { ok: false, reason: 'changed' };
+        const lines = (TEXTS.get(NUDGE_PATH) || '').split('\n');
+        const due = iso(Date.parse(today + 'T00:00:00Z') + days * 86400000);
+        lines[item.line] = /📅\s*\d{4}-\d{2}-\d{2}/.test(lines[item.line]) ? lines[item.line].replace(/(📅\s*)\d{4}-\d{2}-\d{2}/, '$1' + due) : lines[item.line].trimEnd() + ' 📅 ' + due;
+        TEXTS.set(NUDGE_PATH, lines.join('\n'));
+        console.log('[rhythm snooze]', item.title, '→', due); fire();
+        return { ok: true };
+      },
+      async toggle(ref, { today }) {
+        const item = locate(ref);
+        if (!item) return { ok: false, reason: 'changed' };
+        const lines = (TEXTS.get(NUDGE_PATH) || '').split('\n');
+        lines[item.line] = lines[item.line].replace(/\[ \]/, '[x]') + ' ✅ ' + today;
+        TEXTS.set(NUDGE_PATH, lines.join('\n'));
+        console.log('[rhythm toggle]', item.title); fire();
+        return { ok: true };
+      },
     },
-    toggle: async (item, today) => {
-      const lines = (TEXTS.get(NUDGE_PATH) || '').split('\n');
-      const at = lines.indexOf(item.raw);
-      if (at === -1) return { ok: false, rolled: null };
-      lines[at] = lines[at].replace(/\[ \]/, '[x]') + ' ✅ ' + today;
-      TEXTS.set(NUDGE_PATH, lines.join('\n'));
-      console.log('[nudge toggle]', item.title);
-      return { ok: true, rolled: null };
+    practices: {
+      async today({ date }) {
+        const done = doneOn(date);
+        const focus = PRACTICES.map(k => { const fm = RHYTHM_FM[k]; const name = k.slice(k.lastIndexOf('/') + 1, -3); return { name, area: fm.area, when: fm.when || '', whenLabel: WHEN[fm.when] || '', reason: fm.cadence, path: k, done: done.includes(name), ref: 'pr:' + date + ':' + name }; });
+        return { available: true, focus: focus.slice(0, 4), later: Math.max(0, focus.length - 4), done: done.length, total: focus.length, date, folder: 'Rhythm', streak: 2, streakLabel: '2-day streak' };
+      },
+      async tick(ref, on) {
+        const m = /^pr:(\d{4}-\d{2}-\d{2}):(.*)$/.exec(ref);
+        if (!m) return { ok: false, reason: 'name' };
+        const cur = doneOn(m[1]), has = cur.includes(m[2]);
+        const next = on ? (has ? cur : [...cur, m[2]]) : cur.filter(x => x !== m[2]);
+        TEXTS.set(logPath(m[1]), '---\nrhythm: log\ndone: [' + next.join(', ') + ']\n---\n');
+        console.log('[rhythm tick]', m[2], on); fire();
+        return { ok: true, prev: { done: has, skip: false, snooze: false, plan: false } };
+      },
     },
+    events: { between: async (from, to) => EVENTS.filter(e => e.date >= from && e.date <= to) },
   };
 }
 
@@ -202,13 +251,13 @@ const app = {
   },
   commands: {
     executeCommandById: id => { console.log('[command]', id); alert('Would run command ' + id); return true; },
-    listCommands: () => [{ id: 'rhythm:open', name: 'Rhythm: Open Rhythm' }, { id: 'budget-app:open-budget', name: 'Budget Vault: Open budget' }],
+    listCommands: () => [{ id: 'rhythm:open', name: 'Rhythm: Open Rhythm' }, { id: 'rhythm:open-reminders', name: 'Rhythm: Open reminders' }, { id: 'rhythm:reminders-add', name: 'Rhythm: Add a reminder' }, { id: 'budget-app:open-budget', name: 'Budget Vault: Open budget' }],
   },
   internalPlugins: { getEnabledPluginById: id => (id === 'global-search' ? { openGlobalSearch: q => alert('Would search everything for: ' + q) } : null) },
-  /* A stand-in for the Nudge plugin's store: the same three calls Vista uses
-     (path, load, toggle) over the in-memory note, so the card runs its real
-     code here. Nudge's own parser is richer; this is a harness, not a spec. */
-  plugins: { plugins: { 'nudge-reminders': { store: makeNudgeStore() } } },
+  /* A stand-in for the Rhythm plugin: its headless api over the in-memory
+     notes, so the Reminders, Today and calendar-events paths run Vista's real
+     code here. Rhythm's own parser is richer; this is a harness, not a spec. */
+  plugins: { plugins: { rhythm: { api: makeRhythmApi() } }, manifests: { rhythm: { id: 'rhythm' } } },
 };
 
 const settings = Object.assign({}, DEFAULT_SETTINGS, { name: 'Alex', journalFolder: 'Journal', journalTemplate: 'Templates/Daily Note', budgetFolder: 'Budget', weatherLocation: 'London' });

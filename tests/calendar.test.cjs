@@ -27,4 +27,11 @@ assert.strictEqual(g.flat().find(d => d.iso === '2026-09-12').future, false);
 assert.strictEqual(C.monthGrid('2026-09-13', 0, '2026-09-13')[0][0].iso, '2026-08-30');
 /* February 2026 (starts Sunday) on a Monday grid: six rows still. */
 assert.strictEqual(C.monthGrid('2026-02-10', 1, '2026-09-13')[0][0].iso, '2026-01-26');
+/* The range the calendar asks Rhythm's events for: the whole month, leap years included. */
+assert.deepStrictEqual(C.monthRange('2026-09-13'), { from: '2026-09-01', to: '2026-09-30' });
+assert.deepStrictEqual(C.monthRange('2026-10-31'), { from: '2026-10-01', to: '2026-10-31' });
+assert.deepStrictEqual(C.monthRange('2028-02-10'), { from: '2028-02-01', to: '2028-02-29' });
+assert.deepStrictEqual(C.monthRange('2026-02-10'), { from: '2026-02-01', to: '2026-02-28' });
+assert.deepStrictEqual(C.monthRange('2026-12-05'), { from: '2026-12-01', to: '2026-12-31' });
+assert.strictEqual(C.monthRange('nonsense'), null);
 console.log('calendar OK');

@@ -119,7 +119,7 @@ class VistaSettingTab extends PluginSettingTab {
       .addToggle(t => t.setValue(s.showTasks !== false).onChange(async v => { s.showTasks = v; await save(); }));
     new Setting(containerEl).setName('Tasks global filter').setDesc('If the Tasks plugin uses a global filter (like #task), put the same text here so only those lines count.')
       .addText(t => t.setPlaceholder('').setValue(s.tasksGlobalFilter || '').onChange(async v => { s.tasksGlobalFilter = v.trim(); await save(); }));
-    new Setting(containerEl).setName('Reminders').setDesc('What is due from the Nudge plugin, with what is coming next when nothing is. Reading and ticking both go through Nudge, so a repeating reminder rolls forward correctly. Shown only once Nudge is enabled and its note exists.')
+    new Setting(containerEl).setName('Reminders').setDesc('What is due from the reminders in Rhythm, with what is coming next when nothing is. Reading, ticking and snoozing all go through Rhythm, so a repeating reminder rolls forward correctly. Hidden when Rhythm is not installed or has no reminders note yet.')
       .addToggle(t => t.setValue(s.showNudge !== false).onChange(async v => { s.showNudge = v; await save(); }));
     new Setting(containerEl).setName('Next gym session').setDesc('From the Gym plugin\'s plans: the active plan\'s day for today (or the next day that has one), plus parallel plans.')
       .addToggle(t => t.setValue(s.showGym !== false).onChange(async v => { s.showGym = v; await save(); }));
@@ -143,7 +143,7 @@ class VistaSettingTab extends PluginSettingTab {
       .addText(t => t.setPlaceholder('London').setValue(s.weatherLocation || '').onChange(v => { s.weatherLocation = v.trim(); this.plugin.clearWeatherCache(); saveWeatherLocation(); }));
     new Setting(containerEl).setName('Units').addDropdown(d => d.addOption('c', 'Celsius').addOption('f', 'Fahrenheit').setValue(s.weatherUnit || 'c').onChange(async v => { s.weatherUnit = v; await save(); }));
 
-    new Setting(containerEl).setName('Today, from Rhythm').setDesc('The practices the Rhythm plugin would put in front of you today, tickable from here. Hidden when there is no Rhythm folder.')
+    new Setting(containerEl).setName('Today, from Rhythm').setDesc('The practices the Rhythm plugin would put in front of you today, tickable from here. Hidden when Rhythm is not installed or has no practices yet.')
       .addToggle(t => t.setValue(s.showRhythm !== false).onChange(async v => { s.showRhythm = v; await save(); }));
     new Setting(containerEl).setName('Recent notes')
       .addToggle(t => t.setValue(s.showRecent !== false).onChange(async v => { s.showRecent = v; await save(); }));

@@ -1,16 +1,12 @@
 'use strict';
-/* Reminders, from the Nudge plugin.
+/* Reminders: how Vista shows them.
 
-   Nudge keeps every reminder as one Obsidian Tasks checkbox line in a single
-   note, and hangs a store off its plugin instance. So unlike the Budget and
-   Gym cards — which re-read another plugin's files because those plugins
-   offer nothing else — this one reads AND writes through Nudge's own store.
-   That matters most on a tick: `store.toggle` is what rolls a repeating
-   reminder forward and leaves the ✅ behind, and re-spelling that rule here
-   would be a second copy of something already written down once.
-
-   Vista's share is the part that is Vista's: which handful to put in front of
-   you, in what order, and how the date reads. That part is pure and tested.
+   Reminders live in the Rhythm plugin (the Nudge plugin is merged into it).
+   Reading, ticking and snoozing go through Rhythm's headless API - see
+   src/rhythm-api.js - so this file does no I/O at all. What is left is
+   Vista's share: how the date reads, which bucket a reminder falls in, the
+   order of a list, the words on a refusal. Pure and tested. The file keeps
+   its old name; what it describes is Rhythm's reminders.
 
    Dates are compared as ISO strings, never as local Date objects: a reminder
    due on the 20th is due on the 20th in every timezone. */
@@ -19,14 +15,14 @@ const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-/* Nudge's priority vocabulary, so the two apps order a list the same way. */
+/* Rhythm's reminder priority vocabulary (Nudge's, carried over), so the two order a list the same way. */
 const RANK = { highest: 5, high: 4, medium: 3, normal: 2, low: 1, lowest: 0 };
 const URGENT = new Set(['highest', 'high']);
 
 /* A real calendar date, not just four digits in the right shape: the day has
    to exist in that month and year ('2026-02-30' does not). This is Nudge's own
-   check (nudge-vault src/dates.js isISO), copied line for line so the two
-   plugins can never disagree on which bucket a malformed due date lands in —
+   check (nudge-vault src/dates.js isISO), copied line for line so Vista and
+   Rhythm cannot disagree on which bucket a malformed due date lands in —
    '2026-13-40' and '2026-02-30' both have the right shape, and Date.UTC would
    quietly normalise them into a real (wrong) date rather than reject them. */
 function isISO(s) {
@@ -109,32 +105,9 @@ function shortWhen(item, today) {
   return `${DAYS_SHORT[dow(item.due)]} ${+m[3]} ${MONTHS[+m[2] - 1]}${sameYear ? '' : ' ' + m[1]}`;
 }
 
-/* The handful to show: everything already due, topped up with what is coming
-   next, so a day with nothing overdue still says something useful. */
-function summarize(items, today, limit) {
-  const open = (items || []).filter(i => !i.done);
-  const by = { overdue: [], today: [], tomorrow: [], week: [], later: [], someday: [] };
-  for (const i of open) by[bucketOf(i, today)].push(i);
-  for (const k of Object.keys(by)) by[k] = sortItems(by[k]);
-  const n = Math.max(1, limit || 5);
-  const due = [...by.overdue, ...by.today];
-  const ahead = [...by.tomorrow, ...by.week, ...by.later];
-  const rows = due.slice(0, n);
-  if (rows.length < n) rows.push(...ahead.slice(0, n - rows.length));
-  return {
-    rows,
-    buckets: by,
-    counts: {
-      overdue: by.overdue.length, today: by.today.length, due: due.length,
-      ahead: ahead.length, someday: by.someday.length, open: open.length,
-    },
-    more: Math.max(0, open.length - rows.length),
-  };
-}
-
 const isUrgent = item => URGENT.has(String(item && item.priority));
 
-/* Nudge files anything ungrouped under an "Inbox" heading, so on a row that
+/* Reminders carry anything ungrouped under an "Inbox" heading, so on a row that
    word means "no section" — it earns none of the width it costs. */
 const DEFAULT_GROUP = 'Inbox';
 
@@ -163,7 +136,7 @@ function detailRows(item, today) {
   if (it.time) rows.push({ label: 'Time', value: it.time });
   if (it.priority && it.priority !== 'normal') rows.push({ label: 'Priority', value: PRIORITY_LABEL[it.priority] || it.priority });
   /* The repeat rule is shown as the line spells it, rather than re-worded
-     here — Nudge owns that vocabulary. */
+     here — Rhythm owns that vocabulary. */
   if (it.repeat) rows.push({ label: 'Repeats', value: String(it.repeat) });
   if (it.group) rows.push({ label: 'Section', value: it.group });
   if (it.tags && it.tags.length) rows.push({ label: it.tags.length === 1 ? 'Tag' : 'Tags', value: it.tags.join(' ') });
@@ -176,107 +149,27 @@ function detailRows(item, today) {
 /* A stable key for one reminder while the card waits for the write. */
 const keyOf = item => `${item && item.line}:${item && item.raw}`;
 
-/* ---- the Nudge plugin, when it is there -------------------------------- */
-
-function nudgePlugin(app) {
-  try {
-    const all = app && app.plugins && app.plugins.plugins;
-    /* Nudge's id is nudge-reminders; plain `nudge` is someone else's plugin. */
-    const p = all && all['nudge-reminders'];
-    return p || null;
-  } catch (e) { return null; }
-}
-
-/* Nudge's store is the seam: everything below goes through it, and nothing
-   here touches the reminders note directly. */
-function nudgeStore(app) {
-  const p = nudgePlugin(app);
-  const s = p && p.store;
-  return s && typeof s.load === 'function' && typeof s.path === 'function' ? s : null;
-}
-
-function nudgePath(app) {
-  const s = nudgeStore(app);
-  if (!s) return '';
-  try { return s.path() || ''; } catch (e) { return ''; }
-}
-
-/* The card is shown only once there is a note to read: an empty dashboard
-   slot is worse than no slot. */
-function nudgeAvailable(app) {
-  const p = nudgePath(app);
-  if (!p) return false;
-  try { return !!app.vault.getFileByPath(p); } catch (e) { return false; }
-}
-
-async function loadReminders(app, today, limit) {
-  const store = nudgeStore(app);
-  if (!store) return { available: false, rows: [], buckets: null, counts: null, more: 0, path: '' };
-  const { items } = await store.load();
-  return Object.assign({ available: true, path: nudgePath(app) }, summarize(items, today, limit));
-}
-
-/* Ticking goes through Nudge so a repeating reminder rolls forward. The
-   store's result carries WHY a tick did not happen — a repeat whose next
-   date it could not work out is left open on purpose rather than silently
-   ending the series (`{ ok: false, reason: 'repeat', repeat }`). Collapsing
-   that to a bare boolean, as this used to, threw the reason away before
-   dashboard.js ever saw it, so every refusal read as "line not found". */
-/* Vista's rows come from its last load. If the reminder was ticked somewhere
-   else since (Nudge's board, another device), handing that old item to the
-   store is dangerous: its locate() falls back to "same title, same state" and
-   would find the occurrence the roll-forward just created — so this tick would
-   complete the NEXT one too. So re-read first and act only on a line that is
-   still exactly what the row showed (same line number, identical raw text),
-   passing the store its own fresh object. Anything else is 'changed': the
-   caller says so and the user looks at the note. */
-async function freshItem(store, item) {
-  const loaded = await store.load();
-  const items = loaded && Array.isArray(loaded.items) ? loaded.items : [];
-  return items.find(x => x && item && x.line === item.line && x.raw === item.raw) || null;
-}
-
-async function tickReminder(app, item, today) {
-  const store = nudgeStore(app);
-  if (!store || typeof store.toggle !== 'function') return { ok: false };
-  const fresh = await freshItem(store, item);
-  if (!fresh) return { ok: false, reason: 'changed' };
-  const res = await store.toggle(fresh, today);
-  return res || { ok: false };
-}
-
-/* Snoozing counts from today, not from a due date that has passed — the same
-   rule Nudge's own store follows, which is why this only asks it. */
-async function snoozeReminder(app, item, days, today) {
-  const store = nudgeStore(app);
-  if (!store || typeof store.snooze !== 'function') return { ok: false };
-  const fresh = await freshItem(store, item);
-  if (!fresh) return { ok: false, reason: 'changed' };
-  const res = await store.snooze(fresh, days, today);
-  return res || { ok: false };
-}
-
-/* Why a tick did not happen, in Vista's own words — Nudge's board answers
-   the same question for itself (tickRefused() in board.js); this is not
-   copied from there, it just never says "could not find" for a refusal
-   that was never about a missing line. */
+/* Why a tick did not happen, in Vista's own words. Rhythm's api says WHY
+   ({ ok:false, reason }): 'changed' is not "could not find", and a repeat it
+   could not roll forward is left open on purpose, not lost. */
 const CHANGED_NOTICE = 'Vista: That reminder changed — open the note.';
+const MISSING_NOTICE = 'Vista: That reminder is no longer in the note — open it to see.';
+const UNAVAILABLE_NOTICE = "Vista: Rhythm's reminders aren't available right now — open Rhythm.";
 function tickRefusedNotice(res) {
   if (res && res.reason === 'changed') return CHANGED_NOTICE;
-  if (res && res.reason === 'repeat') return `Vista: Nudge couldn't work out the next date for "🔁 ${res.repeat}" — the reminder is still open.`;
-  return "Vista: Nudge couldn't tick that reminder — open the note.";
+  if (res && (res.reason === 'missing' || res.reason === 'bad-ref')) return MISSING_NOTICE;
+  if (res && res.reason === 'unavailable') return UNAVAILABLE_NOTICE;
+  if (res && res.reason === 'repeat') return `Vista: Rhythm couldn't work out the next date for "🔁 ${res.repeat}" — the reminder is still open.`;
+  return "Vista: Rhythm couldn't tick that reminder — open the note.";
 }
 
 /* The same for a snooze that did not happen. */
 function snoozeRefusedNotice(res) {
   if (res && res.reason === 'changed') return CHANGED_NOTICE;
-  return 'Vista: Nudge could not find that reminder — open the note.';
+  if (res && (res.reason === 'missing' || res.reason === 'bad-ref')) return MISSING_NOTICE;
+  if (res && res.reason === 'unavailable') return UNAVAILABLE_NOTICE;
+  return 'Vista: Rhythm could not snooze that reminder — open the note.';
 }
-
-const canSnooze = app => {
-  const store = nudgeStore(app);
-  return !!(store && typeof store.snooze === 'function');
-};
 
 const SNOOZE = [
   { days: 1, label: 'Tomorrow' },
@@ -285,7 +178,7 @@ const SNOOZE = [
 ];
 
 module.exports = {
-  isISO, diffDays, dow, rank, bucketOf, sortItems, whenLabel, shortWhen, humanDate, subLabel, detailRows, summarize, isUrgent, keyOf,
-  nudgePlugin, nudgeStore, nudgePath, nudgeAvailable, loadReminders, tickReminder, snoozeReminder, tickRefusedNotice, snoozeRefusedNotice, canSnooze,
+  isISO, diffDays, dow, rank, bucketOf, sortItems, whenLabel, shortWhen, humanDate, subLabel, detailRows, isUrgent, keyOf,
+  tickRefusedNotice, snoozeRefusedNotice,
   PRIORITY_LABEL, SNOOZE, DAYS, DAYS_SHORT, MONTHS,
 };

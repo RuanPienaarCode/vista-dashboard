@@ -152,11 +152,11 @@ class ListModal extends Modal {
 
 /* One reminder, opened from the Reminders card: what the line actually says,
    and the few things worth doing about it without leaving the dashboard.
-   The modal knows nothing about Nudge — every action is a callback the card
-   hands in, so all writing still goes through Nudge's own store. */
+   The modal knows nothing about Rhythm — every action is a callback the card
+   hands in, so all writing still goes through Rhythm's api. */
 class ReminderModal extends Modal {
   /* item: a parsed reminder; o: { today, note, canSnooze, onDone, onSnooze,
-     onOpenNote, onOpenNudge } */
+     onOpenNote, onOpenReminders } */
   constructor(app, item, o) {
     super(app);
     this.item = item || {};
@@ -197,7 +197,7 @@ class ReminderModal extends Modal {
 
     const actions = el(c, 'div', 'vs-modal-actions');
     let primary = null;
-    if (o.onOpenNudge) button(actions, 'vs-btn', 'Open in Nudge', () => { this.close(); o.onOpenNudge(); });
+    if (o.onOpenReminders) button(actions, 'vs-btn', 'Open in Rhythm', () => { this.close(); o.onOpenReminders(); });
     if (o.onOpenNote) button(actions, 'vs-btn', 'Open the note', () => { this.close(); o.onOpenNote(); });
     if (o.onDone) {
       primary = button(actions, 'vs-btn vs-btn-primary', it.done ? 'Mark not done' : 'Mark done', () => { this.close(); o.onDone(); });
