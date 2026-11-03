@@ -183,7 +183,8 @@ class VistaPlugin extends Plugin {
      and Codex apps. Kept in this device's storage beside the weather cache,
      never in data.json: data.json syncs, and the keys must not travel or
      land in a vault backup. A computer starts on Claude Code (the user's
-     plan); a phone, which cannot run it, on Claude over the API. */
+     plan). Ask AI is off on a phone or tablet: there a device holds no key
+     and none can be saved (3 Nov 2026). */
   aiDeviceKey() {
     let name = '';
     try { name = this.app.vault.getName(); } catch (e) { /* unnamed */ }
@@ -191,6 +192,7 @@ class VistaPlugin extends Plugin {
   }
 
   aiDevice() {
+    if (Platform && Platform.isMobile) return { provider: 'claude-code', keys: {}, paths: {} };
     let saved = null;
     try { saved = JSON.parse(this.weatherStore().getItem(this.aiDeviceKey()) || 'null'); } catch (e) { saved = null; }
     const s = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
@@ -202,6 +204,7 @@ class VistaPlugin extends Plugin {
 
   /* part: { provider?, keys?, paths? } — keys and paths merge by AI. */
   saveAiDevice(part) {
+    if (Platform && Platform.isMobile) return false;
     const cur = this.aiDevice();
     const p = part || {};
     const next = {

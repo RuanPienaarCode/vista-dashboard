@@ -1,7 +1,7 @@
 {
   "id": "vista",
   "name": "Vista",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.8.0",
   "description": "Browse your vault from a glass dashboard with search, quick-access tiles, live stats and a living photo background.",
   "author": "Ruan Pienaar",

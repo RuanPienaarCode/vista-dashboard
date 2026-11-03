@@ -60,7 +60,8 @@ const DEFAULT_SETTINGS = {
   showWeather: true,
   weatherLocation: '',
   weatherUnit: 'c',
-  /* The Ask AI button bottom right. Which AI, its key and app path are per
+  /* The Ask AI button bottom right (computer only, never on a phone or
+     tablet: ai-context.js askAIOn). Which AI, its key and app path are per
      device (main.js aiDevice, never in this synced file); the model per AI
      and the folder saved chats go to are shared. */
   showAskAI: true,

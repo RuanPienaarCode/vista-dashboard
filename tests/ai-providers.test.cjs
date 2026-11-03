@@ -94,7 +94,7 @@ const msgs = [
   assert.ok(P.cliPrompt('codex', { system: 'SYS', messages: [{ role: 'user', content: 'Q' }] }).startsWith('SYS'));
   assert.strictEqual(P.cliPrompt('claude-code', { system: 'S', messages: [{ role: 'user', content: 'Q' }] }), 'Q');
 
-  /* a CLI on a phone (no runner) says so instead of failing oddly */
+  /* a CLI with no runner says so instead of failing oddly */
   await assert.rejects(P.ask({ provider: 'claude-code', system: 'S', messages: msgs }), /runs on a computer only/);
   /* the runner gets the prompt on stdin and the found path */
   let ran = null;

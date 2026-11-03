@@ -4,13 +4,15 @@
 
    Two kinds:
      api  Claude, ChatGPT, Grok, Gemini — over Obsidian's requestUrl with the
-          user's own key (kept per device, never in the vault). Works on the
-          phone too.
+          user's own key (kept per device, never in the vault).
      cli  Claude Code, Codex — the user's own installed app, signed in to
           their Claude or ChatGPT plan, run by src/ai-cli.js on a computer.
           Talk only: every tool is switched off by the arguments below
           (claudeArgs, codexArgs, pinned in tests/ai-providers.test.cjs), and
           it runs in an empty temporary folder with nothing saved.
+
+   Ask AI is a computer feature (Ruan, 3 Nov 2026): ask() refuses, before any
+   request or run, when the caller's platform says mobile (a phone or tablet).
 
    The chat only reads and answers. No AI here is given a tool, web search
    or a way to change the vault.
@@ -175,7 +177,7 @@ function codexRead(stdout, model) {
 }
 
 async function askCli(p, o) {
-  if (typeof o.run !== 'function') throw new Error(`${p.name} runs on a computer only (it uses the ${p.bin} app you sign in to with your ${p.plan} plan). Pick Claude, ChatGPT, Grok or Gemini for this device in Settings → Vista → Ask AI.`);
+  if (typeof o.run !== 'function') throw new Error(`${p.name} runs on a computer only (it uses the ${p.bin} app you sign in to with your ${p.plan} plan).`);
   const args = p.id === 'codex' ? codexArgs(o) : claudeArgs(o);
   let res;
   try {
@@ -198,9 +200,14 @@ async function askCli(p, o) {
 
 /* ---- one way in --------------------------------------------------------- */
 
+const MOBILE_REFUSAL = 'Ask AI is on the computer only.';
+
 /* o: { provider, system, messages: [{ role, content }], model, apiKey,
-   request (api), run + binPath + timeoutMs (cli) } → { text, model, stop } */
+   request (api), run + binPath + timeoutMs (cli), platform (Obsidian's
+   Platform) } → { text, model, stop }. The one place a question leaves the
+   plugin, so the mobile refusal lives here: nothing below it can run. */
 async function ask(o) {
+  if (o.platform && o.platform.isMobile) throw new Error(MOBILE_REFUSAL);
   const p = provider(o.provider);
   if (p.kind === 'cli') return askCli(p, o);
   if (!o.apiKey) throw new Error(`Add your ${p.name} API key in Settings → Vista → Ask AI.`);
@@ -212,4 +219,4 @@ async function ask(o) {
   return chatRead(json);
 }
 
-module.exports = { PROVIDERS, CODEX_OFF, provider, ask, cleanMessages, httpFailure, claudeBody, claudeRead, chatBody, chatRead, cliPrompt, claudeArgs, claudeCliRead, codexArgs, codexRead };
+module.exports = { MOBILE_REFUSAL, PROVIDERS, CODEX_OFF, provider, ask, cleanMessages, httpFailure, claudeBody, claudeRead, chatBody, chatRead, cliPrompt, claudeArgs, claudeCliRead, codexArgs, codexRead };

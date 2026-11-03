@@ -40,6 +40,9 @@ function tameAnswer(node) {
 /* o: { app, plugin, root, readPage: () => string } */
 function mountAskAI(o) {
   const { app, plugin, root } = o;
+  /* Computer only: on a phone or tablet nothing is drawn and nothing listens,
+     whatever called this. The inert handle keeps every caller working. */
+  if (obsidian.Platform && obsidian.Platform.isMobile) return { open() {}, toggle() {}, refresh() {}, stop() {} };
   if (!plugin.aiChat) plugin.aiChat = { messages: [], item: null, pending: null };
   /* pending: the token of the question still out, or null. It lives on the
      chat, not this mount, so an answer that lands after the dashboard closed
@@ -185,6 +188,7 @@ function mountAskAI(o) {
   }
 
   async function send() {
+    if (obsidian.Platform && obsidian.Platform.isMobile) return;
     const q = input.value.trim();
     if (!q || chat.pending) return;
     input.value = ''; grow();
@@ -207,6 +211,7 @@ function mountAskAI(o) {
         system: C.systemPrompt({ now: new Date(), vault, name: s.name, page: o.readPage(), item: chat.item }),
         messages: chat.messages.filter(m => !m.error),
         request: obsidian.requestUrl,
+        platform: obsidian.Platform,
         run: runner ? runner.run : null,
         binPath: runner ? runner.find(p.bin, (dev.paths || {})[p.id]) : '',
         timeoutMs: 5 * 60 * 1000,

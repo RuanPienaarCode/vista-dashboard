@@ -29,7 +29,7 @@ global.window = { localStorage: storage };
   assert.deepStrictEqual(p.settings.aiModels, {});
   assert.strictEqual(p.settings.aiChatFolder, 'AI Chats');
 
-  /* no runner here (not a desktop app): a phone starts on Claude over the API */
+  /* no runner here: the fallback is Claude over the API (on a phone or tablet Ask AI is off altogether, tests/ai-mobile.test.cjs) */
   assert.strictEqual(p.aiRunner(), null);
   assert.deepStrictEqual(p.aiDevice(), { provider: 'claude', keys: {}, paths: {} });
 

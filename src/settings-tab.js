@@ -226,7 +226,7 @@ class VistaSettingTab extends PluginSettingTab {
           const res = await P.ask({
             provider: p.id, model: (s.aiModels || {})[p.id] || p.model, apiKey: cur.keys[p.id] || '',
             system: 'Reply with the single word OK.', messages: [{ role: 'user', content: 'Are you there?' }],
-            request: requestUrl, run: runner ? runner.run : null, binPath: runner ? runner.find(p.bin, cur.paths[p.id]) : '', timeoutMs: 2 * 60 * 1000,
+            request: requestUrl, platform: Platform, run: runner ? runner.run : null, binPath: runner ? runner.find(p.bin, cur.paths[p.id]) : '', timeoutMs: 2 * 60 * 1000,
           });
           new Notice(`${p.name} answered${res.model ? ' (' + res.model + ')' : ''}: ${String(res.text || '').trim().slice(0, 80) || '(empty)'}`);
         } catch (e) {
