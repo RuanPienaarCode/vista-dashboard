@@ -60,8 +60,11 @@ const floatAt = bare.indexOf(floatSel);
 assert.ok(floatAt !== -1, `missing "${floatSel}" padding-bottom rule`);
 const floatRule = bare.slice(floatAt, bare.indexOf('}', floatAt));
 assert.ok(/padding-bottom:\s*calc\([^)]*var\(--view-bottom-spacing,\s*0px\)\)/.test(floatRule), 'floating-nav rule must pad-bottom by var(--view-bottom-spacing, 0px)');
-for (const e of calcExpressions(bare).filter(x => /--view-bottom-spacing/.test(x))) {
-  assert.ok(floatRule.includes(e), `--view-bottom-spacing may only be added inside the floating-nav scope (it is a unitless 0 elsewhere): ${e}`);
+/* Every rule that adds it (the page pad, and the Ask AI button and panel
+   lifted clear of the bar) must be scoped to the floating nav. */
+for (const m of bare.matchAll(/([^{}]+)\{([^{}]*--view-bottom-spacing[^{}]*)\}/g)) {
+  const sel = m[1].trim();
+  assert.ok(sel.split(',').every(x => x.trim().startsWith('.is-phone.is-floating-nav ')), `--view-bottom-spacing may only be added inside the floating-nav scope (it is a unitless 0 elsewhere): ${sel}`);
 }
 
 console.log('css floating-nav OK');

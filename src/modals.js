@@ -156,7 +156,7 @@ class ListModal extends Modal {
    hands in, so all writing still goes through Rhythm's api. */
 class ReminderModal extends Modal {
   /* item: a parsed reminder; o: { today, note, canSnooze, onDone, onSnooze,
-     onOpenNote, onOpenReminders } */
+     onOpenNote, onOpenReminders, onAskAI } */
   constructor(app, item, o) {
     super(app);
     this.item = item || {};
@@ -197,6 +197,7 @@ class ReminderModal extends Modal {
 
     const actions = el(c, 'div', 'vs-modal-actions');
     let primary = null;
+    if (o.onAskAI) button(actions, 'vs-btn', 'Ask AI', () => { this.close(); o.onAskAI(); });
     if (o.onOpenReminders) button(actions, 'vs-btn', 'Open in Rhythm', () => { this.close(); o.onOpenReminders(); });
     if (o.onOpenNote) button(actions, 'vs-btn', 'Open the note', () => { this.close(); o.onOpenNote(); });
     if (o.onDone) {

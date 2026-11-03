@@ -23,6 +23,7 @@ const TK = require('./tasks');
 const NU = require('./nudge');
 const GY = require('./gym');
 const W = require('./weather');
+const { mountAskAI } = require('./ai-chat');
 
 const RESULT_LIMIT = 8;
 const CONTENT_LIMIT = 4;
@@ -168,6 +169,8 @@ function mountDashboard(view) {
   };
   let bgLayers = [], bgFront = -1, canvas, veil, page, greetEl, subEl, vaultEl, clockEl;
   let searchWrap, searchInput, resultsEl, tilesEl, colsEl, footEl, photoLabel, calEl, weatherEl, wxEl, captureEl;
+  /* The Ask AI button and panel; null while switched off in Settings. */
+  let askAI = null;
   let fx = null, searchTimer = null, contentTimer = null, statsTimer = null, rhythmTimer = null, budgetTimer = null, nudgeTimer = null, unsubscribeBudgetApi = null, stopped = false;
   /* Which Budget plugin instance we are subscribed to, and a counter that goes
      up whenever that instance changes: a read that started against the old
@@ -1245,6 +1248,7 @@ function mountDashboard(view) {
       onSnooze: days => snoozeNudge(item, days),
       onOpenNote: () => openNudge(item),
       onOpenReminders: () => A.runCommand(app, 'rhythm:open-reminders'),
+      onAskAI: askAI ? () => { if (askAI) askAI.open(reminderForAI(item)); } : null,
     }).open();
   }
 
@@ -1940,6 +1944,28 @@ function mountDashboard(view) {
 
   /* ---- lifecycle -------------------------------------------------------- */
 
+  /* The page as it reads on screen, for the Ask AI chat: innerText leaves
+     out whatever is hidden (closed popups, collapsed groups) the way a
+     reader would. textContent is the fallback where there is no layout. */
+  function readPage() {
+    if (!page) return '';
+    const t = typeof page.innerText === 'string' ? page.innerText : '';
+    return t || page.textContent || '';
+  }
+
+  function syncAskAI() {
+    const want = settings().showAskAI !== false;
+    if (want && !askAI) askAI = mountAskAI({ app, plugin, root, readPage });
+    else if (!want && askAI) { askAI.stop(); askAI = null; }
+    else if (askAI) askAI.refresh();
+  }
+
+  /* A reminder, as the AI is told about it when the chat opens from it. */
+  function reminderForAI(item) {
+    const rows = NU.detailRows(item, D.todayISO()).map(r => `${r.label}: ${r.value}`);
+    return { label: 'Reminder: ' + (item.title || 'untitled'), text: [`Title: ${item.title || ''}`].concat(rows, item.raw ? ['Line: ' + String(item.raw).trim()] : []).join('\n') };
+  }
+
   function renderAll() {
     renderHeader();
     renderTiles();
@@ -1950,6 +1976,7 @@ function mountDashboard(view) {
     gatherStats(false);
     captureEl.classList.toggle('is-hidden', settings().showCapture === false);
     loadWeather(false);
+    syncAskAI();
   }
 
   /* renderHeader() runs every 15s, but everything else on the page is drawn
@@ -2061,11 +2088,14 @@ function mountDashboard(view) {
       if (typeof unsubscribeBudgetApi === 'function') { try { unsubscribeBudgetApi(); } catch (e) { /* the Budget plugin may already be gone */ } unsubscribeBudgetApi = null; }
       plugin._budgetCache = budgetCacheAfterStop(plugin._budgetCache);
       if (nudgeTimer) clearTimeout(nudgeTimer);
+      if (askAI) { askAI.stop(); askAI = null; }
       rhythmLink.stop();
       root.classList.remove('vs-app', 'is-plain');
       clear(root);
     },
-    refresh() { if (stopped) return; renderHeader(); renderTiles(); renderCols(); renderFoot(); applyBackground(); applyEffect(); captureEl.classList.toggle('is-hidden', settings().showCapture === false); loadWeather(false); },
+    refresh() { if (stopped) return; renderHeader(); renderTiles(); renderCols(); renderFoot(); applyBackground(); applyEffect(); captureEl.classList.toggle('is-hidden', settings().showCapture === false); loadWeather(false); syncAskAI(); },
+    /* item: { label, text } | undefined — the command and other callers. */
+    askAI(item) { if (!askAI) { new Notice('Vista: Ask AI is switched off in Settings → Vista.'); return; } askAI.open(item); },
     focusSearch() { if (searchInput) { searchInput.focus(); searchInput.select(); } },
     nextPhoto() {
       if (settings().background !== 'photos') return;

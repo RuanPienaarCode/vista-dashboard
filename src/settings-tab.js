@@ -1,12 +1,13 @@
 'use strict';
 /* Settings tab. */
 
-const { PluginSettingTab, Setting, normalizePath } = require('obsidian');
+const { PluginSettingTab, Setting, Notice, normalizePath, requestUrl } = require('obsidian');
 const { el, icon } = require('./dom');
 const { GRADIENTS, listPhotos, photoTitle } = require('./background');
 const { TYPES, LEAF_PALETTES, leafPalette } = require('./effects');
 const T = require('./tiles');
 const { TileModal } = require('./modals');
+const P = require('./ai-providers');
 
 /* Collapses rapid-fire calls (typing) into one trailing call `ms` after the
    last one — used so a half-typed weather place isn't saved (and geocoded)
@@ -133,7 +134,7 @@ class VistaSettingTab extends PluginSettingTab {
       .addToggle(t => t.setValue(s.captureTimestamp !== false).onChange(async v => { s.captureTimestamp = v; await save(); }));
 
     new Setting(containerEl).setName('Weather').setHeading();
-    el(containerEl, 'p', 'vs-settings-note', 'Weather is fetched from open-meteo.com, a free service with no account. This is the only thing in Vista that uses the network: it sends the place name once to find coordinates, then the coordinates every half hour. Nothing from your vault is sent.');
+    el(containerEl, 'p', 'vs-settings-note', 'Weather is fetched from open-meteo.com, a free service with no account. Apart from Ask AI (below), this is the only thing in Vista that uses the network: it sends the place name once to find coordinates, then the coordinates every half hour. Nothing from your vault is sent.');
     new Setting(containerEl).setName('Show weather').addToggle(t => t.setValue(s.showWeather !== false).onChange(async v => { s.showWeather = v; await save(); }));
     /* Saved on a 600ms debounce, not every keystroke: a raw onChange here
        would geocode (and re-fetch weather for) every half-typed place name
@@ -156,6 +157,8 @@ class VistaSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Journal template').setDesc('A note whose body seeds a new daily note. Supports {{date}}, {{date:dddd, D MMMM YYYY}}, {{time}} and {{title}}. Optional.')
       .addText(t => t.setPlaceholder('Templates/Daily note').setValue(s.journalTemplate || '').onChange(async v => { s.journalTemplate = pathValue(v); await save(); }));
 
+    this.displayAskAI(containerEl, s, save);
+
     new Setting(containerEl).setName('Tiles').setHeading();
     const tiles = T.resolveTiles(s);
     const list = el(containerEl, 'div', 'vs-settings-tiles');
@@ -173,6 +176,60 @@ class VistaSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .addButton(b => b.setButtonText('Add tile').setCta().onClick(() => new TileModal(this.app, null, async nt => { await saveTiles([...tiles, nt]); }).open()))
       .addButton(b => b.setButtonText('Reset to defaults').onClick(async () => { s.tiles = null; await save(); this.display(); }));
+  }
+
+  /* The Ask AI section. Which AI and its key or app path belong to this
+     device (plugin.aiDevice); the model per AI and the chats folder sync. */
+  displayAskAI(containerEl, s, save) {
+    const plugin = this.plugin;
+    const runner = plugin.aiRunner();
+    const dev = plugin.aiDevice();
+    const p = P.provider(dev.provider);
+    new Setting(containerEl).setName('Ask AI').setHeading();
+    el(containerEl, 'p', 'vs-settings-note', 'A round button bottom right on the dashboard opens a chat. Each question sends what the dashboard shows at that moment (its visible text: your reminders, habits, tasks, weather and tiles) to the AI you pick here, and nothing else from your vault. The AI can only answer; it cannot change anything.');
+    new Setting(containerEl).setName('Show the Ask AI button')
+      .addToggle(t => t.setValue(s.showAskAI !== false).onChange(async v => { s.showAskAI = v; await save(); }));
+    new Setting(containerEl).setName('AI on this device').setDesc(runner
+      ? 'Claude Code and Codex use your Claude or ChatGPT plan through their app on this computer, at no extra cost. The others need an API key and bill it per question.'
+      : 'Each needs an API key and bills it per question. (Claude Code and Codex run on a computer only.)')
+      .addDropdown(d => {
+        for (const x of P.PROVIDERS) if (x.kind === 'api' || runner) d.addOption(x.id, x.kind === 'cli' ? `${x.name} (your ${x.plan} plan)` : x.name);
+        d.setValue(p.id).onChange(v => { plugin.saveAiDevice({ provider: v }); plugin.refreshViews(); this.display(); });
+      });
+    if (p.kind === 'api') {
+      new Setting(containerEl).setName(`${p.name} API key`).setDesc(`Kept on this device only, never in the vault or its sync. Make one at ${p.console}.`)
+        .addText(t => {
+          t.inputEl.type = 'password';
+          t.inputEl.setAttribute('autocomplete', 'off');
+          t.setPlaceholder(p.keyHint).setValue(dev.keys[p.id] || '').onChange(v => { plugin.saveAiDevice({ keys: { [p.id]: v.trim() } }); });
+        });
+    } else {
+      new Setting(containerEl).setName(`${p.name} app`).setDesc(`Found automatically in the usual places. Set the full path only if Vista cannot find ${p.bin}. Sign in once in Terminal (${p.id === 'codex' ? 'codex login' : 'claude'}).`)
+        .addText(t => t.setPlaceholder(runner ? runner.find(p.bin, '') : p.bin).setValue(dev.paths[p.id] || '').onChange(v => { plugin.saveAiDevice({ paths: { [p.id]: v.trim() } }); }));
+    }
+    new Setting(containerEl).setName('Model').setDesc(p.kind === 'cli' ? `Leave blank for ${p.name}'s own default.` : `Leave blank for ${p.model}. Shared by all your devices.`)
+      .addText(t => t.setPlaceholder(p.model || 'default').setValue((s.aiModels || {})[p.id] || '').onChange(async v => {
+        if (!s.aiModels || typeof s.aiModels !== 'object') s.aiModels = {};
+        if (v.trim()) s.aiModels[p.id] = v.trim(); else delete s.aiModels[p.id];
+        await plugin.saveSettings();
+      }));
+    new Setting(containerEl).setName('Try it').setDesc('Asks a one-word question to check the key, model or app works.')
+      .addButton(b => b.setButtonText('Test').onClick(async () => {
+        b.setDisabled(true); b.setButtonText('Asking…');
+        const cur = plugin.aiDevice();
+        try {
+          const res = await P.ask({
+            provider: p.id, model: (s.aiModels || {})[p.id] || p.model, apiKey: cur.keys[p.id] || '',
+            system: 'Reply with the single word OK.', messages: [{ role: 'user', content: 'Are you there?' }],
+            request: requestUrl, run: runner ? runner.run : null, binPath: runner ? runner.find(p.bin, cur.paths[p.id]) : '', timeoutMs: 2 * 60 * 1000,
+          });
+          new Notice(`${p.name} answered${res.model ? ' (' + res.model + ')' : ''}: ${String(res.text || '').trim().slice(0, 80) || '(empty)'}`);
+        } catch (e) {
+          new Notice(String((e && e.message) || e), 10000);
+        } finally { b.setDisabled(false); b.setButtonText('Test'); }
+      }));
+    new Setting(containerEl).setName('Saved chats folder').setDesc('Where a chat goes when you press Save in it.')
+      .addText(t => t.setPlaceholder('AI Chats').setValue(s.aiChatFolder || '').onChange(async v => { s.aiChatFolder = pathValue(v) || 'AI Chats'; await plugin.saveSettings(); }));
   }
 }
 

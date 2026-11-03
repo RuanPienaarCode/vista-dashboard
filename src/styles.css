@@ -560,6 +560,107 @@
    and layered on top of the narrow breakpoint's own 32px bottom pad above. */
 .is-phone.is-floating-nav .vs-app .vs-page { padding-bottom: calc(32px + var(--view-bottom-spacing, 0px)); }
 
+/* ---- Ask AI --------------------------------------------------------------
+   The button and panel hang off the view root, outside .vs-page, so they
+   float over the scroll and need their own button reset: (0,2,1) beats
+   app.css's button:not(.clickable-icon) (0,1,1), and every styled button
+   below carries (0,3,0) or more so the reset never strips it. The page gets
+   room at the bottom so the footer's buttons are never under the circle. */
+.vs-app.has-ai .vs-page { padding-bottom: 96px; }
+.vs-app .vs-ai button, .vs-app button.vs-ai-fab { background: transparent; box-shadow: none; border: 0; padding: 0; margin: 0; height: auto; font: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.vs-app .vs-ai button:hover { background: transparent; box-shadow: none; }
+
+.vs-app button.vs-ai-fab {
+  position: absolute; right: 22px; bottom: 22px; z-index: 6; display: flex; align-items: center; justify-content: center;
+  width: 54px; height: 54px; border-radius: 50%; color: var(--vs-ink);
+  background: var(--vs-glass-2); border: 1px solid var(--vs-line-2);
+  -webkit-backdrop-filter: blur(var(--vs-blur)) saturate(160%); backdrop-filter: blur(var(--vs-blur)) saturate(160%);
+  box-shadow: var(--vs-shadow), inset 0 1px 0 var(--vs-shine);
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+.vs-app button.vs-ai-fab .vs-icon, .vs-app button.vs-ai-fab .vs-icon svg { width: 22px; height: 22px; }
+.vs-app button.vs-ai-fab.is-open { background: var(--vs-glass-3); }
+.vs-app button.vs-ai-fab:active { transform: scale(0.94); }
+@media (hover: hover) { .vs-app button.vs-ai-fab:hover { background: var(--vs-glass-3); transform: translateY(-1px); } }
+
+.vs-app .vs-ai {
+  position: absolute; right: 22px; bottom: 88px; z-index: 7; display: flex; flex-direction: column;
+  width: 400px; max-width: calc(100% - 32px); height: min(560px, calc(100% - 120px));
+  border-radius: var(--vs-radius); background: var(--vs-panel); color: var(--vs-ink); text-align: left;
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--vs-line); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--vs-shine);
+  overflow: hidden;
+}
+.vs-app .vs-ai-head { display: flex; align-items: center; gap: 4px; padding: 10px 8px 6px 16px; }
+.vs-app .vs-ai-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.vs-app .vs-ai-title-text { font-size: 15px; font-weight: 600; }
+.vs-app .vs-ai-provider { font-size: 12px; color: var(--vs-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-ai .vs-ai-iconbtn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; color: var(--vs-dim); }
+.vs-app .vs-ai .vs-ai-iconbtn .vs-icon, .vs-app .vs-ai .vs-ai-iconbtn .vs-icon svg { width: 16px; height: 16px; }
+@media (hover: hover) { .vs-app .vs-ai .vs-ai-iconbtn:hover { background: var(--vs-glass); color: var(--vs-ink); } }
+
+.vs-app .vs-ai-about { display: flex; align-items: center; gap: 6px; margin: 0 12px 6px; padding: 5px 6px 5px 10px; min-height: 30px; border-radius: 9px; background: var(--vs-glass); font-size: 12px; color: var(--vs-dim); }
+.vs-app .vs-ai-about .vs-ai-about-icon, .vs-app .vs-ai-about .vs-ai-about-icon svg { width: 14px; height: 14px; }
+.vs-app .vs-ai-about-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-app .vs-ai .vs-ai-about-x { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; color: var(--vs-faint); }
+.vs-app .vs-ai .vs-ai-about-x .vs-icon, .vs-app .vs-ai .vs-ai-about-x .vs-icon svg { width: 14px; height: 14px; }
+
+.vs-app .vs-ai-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 12px 10px; display: flex; flex-direction: column; gap: 10px; }
+.vs-app .vs-ai-empty { margin: auto 4px; padding: 12px 0; text-align: center; }
+.vs-app .vs-ai-empty-title { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
+.vs-app .vs-ai-empty-sub { font-size: 13px; color: var(--vs-faint); margin-top: 6px; }
+/* overflow-wrap: anywhere is iOS 15.4+; word-break: break-word does the same
+   job on 15.0-15.3, so a long link can't push the panel sideways there. */
+.vs-app .vs-ai-msg { max-width: 92%; font-size: 14px; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere; }
+.vs-app .vs-ai-msg.is-user { align-self: flex-end; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: var(--vs-glass-3); white-space: pre-wrap; }
+.vs-app .vs-ai-msg.is-ai { align-self: flex-start; padding: 8px 12px 6px; border-radius: 14px 14px 14px 4px; background: var(--vs-glass); }
+.vs-app .vs-ai-msg.is-error { color: var(--vs-late-ink); background: var(--vs-late-bg); padding-bottom: 8px; }
+.vs-app .vs-ai-body > :first-child { margin-top: 0; }
+.vs-app .vs-ai-body > :last-child { margin-bottom: 0; }
+.vs-app .vs-ai-body p, .vs-app .vs-ai-body ul, .vs-app .vs-ai-body ol { margin: 0 0 8px; }
+.vs-app .vs-ai-body ul, .vs-app .vs-ai-body ol { padding-left: 20px; }
+.vs-app .vs-ai-body h1, .vs-app .vs-ai-body h2, .vs-app .vs-ai-body h3, .vs-app .vs-ai-body h4 { font-size: 14px; font-weight: 600; margin: 10px 0 4px; color: var(--vs-ink); }
+.vs-app .vs-ai-body a { color: var(--vs-accent); }
+.vs-app .vs-ai-body code { font-size: 12.5px; background: var(--vs-glass-2); padding: 1px 4px; border-radius: 4px; }
+.vs-app .vs-ai-tools { display: flex; align-items: center; gap: 2px; margin: 4px -6px 0; }
+.vs-app .vs-ai .vs-ai-tool { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 7px; font-size: 12px; color: var(--vs-faint); }
+.vs-app .vs-ai .vs-ai-tool .vs-icon, .vs-app .vs-ai .vs-ai-tool .vs-icon svg { width: 13px; height: 13px; }
+@media (hover: hover) { .vs-app .vs-ai .vs-ai-tool:hover { background: var(--vs-glass-2); color: var(--vs-ink); } }
+.vs-app .vs-ai-note { font-size: 11px; color: var(--vs-faint); margin-left: 4px; }
+.vs-app .vs-ai-msg.is-thinking { display: flex; gap: 5px; padding: 12px 14px; }
+.vs-app .vs-ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--vs-dim); animation: vs-ai-dot 1.2s ease-in-out infinite; }
+.vs-app .vs-ai-dot:nth-child(2) { animation-delay: 0.15s; }
+.vs-app .vs-ai-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes vs-ai-dot { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .vs-app .vs-ai-dot { animation: none; opacity: 0.7; } }
+
+.vs-app .vs-ai-form { display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px 10px 12px; border-top: 1px solid var(--vs-line); }
+/* 16px: iOS zooms the page into any field smaller than that. */
+.vs-app .vs-ai textarea.vs-ai-input {
+  flex: 1 1 auto; min-width: 0; min-height: 36px; max-height: 140px; resize: none; margin: 0; padding: 8px 12px;
+  border-radius: 12px; border: 1px solid var(--vs-line); background: var(--vs-glass); color: var(--vs-ink);
+  font: inherit; font-size: 16px; line-height: 1.3; box-shadow: none;
+}
+.vs-app .vs-ai textarea.vs-ai-input::placeholder { color: var(--vs-faint); }
+.vs-app .vs-ai textarea.vs-ai-input:focus { outline: none; border-color: var(--vs-line-2); box-shadow: none; }
+.vs-app .vs-ai .vs-ai-send { display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--vs-ink); color: var(--vs-ground); }
+.vs-app .vs-ai .vs-ai-send:hover { background: var(--vs-ink); }
+.vs-app .vs-ai .vs-ai-send.is-stop { background: var(--vs-glass-3); color: var(--vs-ink); }
+.vs-app .vs-ai .vs-ai-send .vs-icon, .vs-app .vs-ai .vs-ai-send .vs-icon svg { width: 18px; height: 18px; }
+
+/* A phone: the open chat fills the dashboard (the circle hides under it; X
+   closes), so with the keyboard up on a 667pt-tall iPhone SE/6s there is
+   still room for the header, an answer and the box. */
+@media (max-width: 760px) {
+  .vs-app button.vs-ai-fab { right: 16px; bottom: 16px; width: 50px; height: 50px; }
+  .vs-app button.vs-ai-fab.is-open { display: none; }
+  .vs-app .vs-ai { top: 8px; left: 8px; right: 8px; bottom: 8px; width: auto; max-width: none; height: auto; }
+}
+/* Above the iPhone's floating bar, like the page's own bottom pad. */
+.is-phone.is-floating-nav .vs-app button.vs-ai-fab { bottom: calc(16px + var(--view-bottom-spacing, 0px)); }
+.is-phone.is-floating-nav .vs-app .vs-ai { bottom: calc(8px + var(--view-bottom-spacing, 0px)); }
+.is-phone.is-floating-nav .vs-app.has-ai .vs-page { padding-bottom: calc(96px + var(--view-bottom-spacing, 0px)); }
+
 /* ---- modals + settings (outside .vs-app) ---------------------------------- */
 
 .vs-modal .vs-modal-title { margin: 0 0 12px; font-size: 20px; font-weight: 600; }

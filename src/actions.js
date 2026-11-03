@@ -380,4 +380,4 @@ async function runTile(app, settings, tile, forceMode) {
   }
 }
 
-module.exports = { openMode, resolveNote, openFile, openNote, runCommand, openGlobalSearch, openDaily, openDailyFor, ensureDaily, pickDailyNote, journalDays, captureToJournal, insertCapture, runTile, fillTemplate, formatToken };
+module.exports = { openMode, resolveNote, openFile, openNote, runCommand, openGlobalSearch, openDaily, openDailyFor, ensureDaily, ensureFolder, pickDailyNote, journalDays, captureToJournal, insertCapture, runTile, fillTemplate, formatToken };

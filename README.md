@@ -9,7 +9,7 @@ Desktop and mobile (iOS and Android). Vista reads and writes your notes through 
 - **Tasks** — ticks a task through its `apiV1` toggle, so recurring tasks roll over.
 - **Omnisearch** — in-text search results.
 
-No vault content leaves your device. The network is used by the optional weather (below), and by links you click: "More on yr.no" in the weather panel and any Web-link tile open your browser.
+No vault content leaves your device unless you ask the AI something: each Ask AI question sends the dashboard's visible text to the AI you picked (below). Otherwise the network is used by the optional weather (below), and by links you click: "More on yr.no" in the weather panel and any Web-link tile open your browser.
 
 ## What's on it
 
@@ -22,11 +22,13 @@ No vault content leaves your device. The network is used by the optional weather
 - **Gym** — the next session from the Gym plugin's plans: the active plan's day for today or the next day that has one, plus parallel plans, and when you last trained.
 - **Quick capture** — a one-line box under the search that appends a timestamped bullet under a heading in today's journal note, creating the note from your template if needed.
 - **Calendar** — click the date under the greeting: a month with a weekday row, dots on days with a journal note and on Rhythm events (from Rhythm's api), and the week starts where Rhythm's does. Tap a day to open its note.
-- **Weather** — current conditions, high/low and rain chance under the clock, from [open-meteo.com](https://open-meteo.com) (free, no account). This is the only network use in the plugin: it sends the place name once to find coordinates, then the coordinates every half hour. Nothing from the vault is sent. Off until you set a place in Settings; clear the place to turn it off again. The panel's "More on yr.no" link opens yr.no in your browser.
+- **Weather** — current conditions, high/low and rain chance under the clock, from [open-meteo.com](https://open-meteo.com) (free, no account). Apart from Ask AI, this is the only network use in the plugin: it sends the place name once to find coordinates, then the coordinates every half hour. Nothing from the vault is sent. Off until you set a place in Settings; clear the place to turn it off again. The panel's "More on yr.no" link opens yr.no in your browser.
 - **Recent** — what you last opened, with when it last changed.
 - **Vault** — notes, words, open tasks, links, tags, orphans (click to list them), journal streak, notes edited today; attachments, folders, size and unresolved links underneath. Recounted a few seconds after the vault changes; text is cached per note so the recount is cheap.
 - **Background** — a photo from a folder in the vault (a different one each day, a random one per open, or a fixed one), a gradient, or plain theme colours. Darken and blur are sliders. Shuffle from the footer.
 - **Effect** — stars (with the odd shooting star), leaves, snow, fireflies, rain, dust and light, constellation, or none. *Auto* picks stars at night and dust by day. Honours *reduce motion* with a single still frame; pauses when the view is hidden; lighter particle counts on phones.
+
+- **Ask AI** — a round button bottom right opens a chat about the dashboard. Each question is sent with the page's visible text (your cards, as you see them) and, when you open it from a reminder's popup, that reminder. Pick the AI per device in Settings: Claude, ChatGPT, Grok or Gemini with your own API key (kept in that device's local storage, never in the vault or `data.json`), or on a computer Claude Code or Codex signed in to your Claude or ChatGPT plan, run with every tool switched off. The AI only reads and answers; each answer has Copy and Add to journal, and Save writes the chat to a note. The chat is kept until Obsidian closes or you clear it. Switch the button off in Settings → Ask AI.
 
 ## Photos
 

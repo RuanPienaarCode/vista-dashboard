@@ -12,6 +12,8 @@ const { VIEW_TYPE, DEFAULT_SETTINGS } = require('./constants');
 const { VistaView } = require('./view');
 const { VistaSettingTab } = require('./settings-tab');
 const W = require('./weather');
+const P = require('./ai-providers');
+const { makeRunner } = require('./ai-cli');
 
 class VistaPlugin extends Plugin {
   async onload() {
@@ -24,12 +26,20 @@ class VistaPlugin extends Plugin {
       name: 'Search from the dashboard',
       callback: async () => { await this.activateView(); this.forEachView(c => c.focusSearch()); },
     });
+    this.addCommand({
+      id: 'ask-ai',
+      name: 'Ask AI about the dashboard',
+      callback: async () => { await this.activateView(); this.forEachView(c => c.askAI()); },
+    });
     this.addCommand({ id: 'next-photo', name: 'Next background photo', callback: () => this.forEachView(c => c.nextPhoto()) });
     this.addCommand({ id: 'cycle-effect', name: 'Cycle the background effect', callback: () => this.forEachView(c => c.cycleEffect()) });
     this.settingTab = new VistaSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
     this.app.workspace.onLayoutReady(() => this.maybeOpenOnStartup());
   }
+
+  /* A Claude Code or Codex run still going is stopped with the plugin. */
+  onunload() { if (this._aiRunner) this._aiRunner.killAll(); }
 
   maybeOpenOnStartup() {
     const mode = this.settings.openOnStartup || 'always';
@@ -90,6 +100,7 @@ class VistaPlugin extends Plugin {
     if (!Array.isArray(next.hiddenGroups)) next.hiddenGroups = [];
     /* typeof [] is 'object' too: an array here would never keep a size set on it. */
     if (!isPlainObject(next.widgetSizes)) next.widgetSizes = {};
+    if (!isPlainObject(next.aiModels)) next.aiModels = {};
     if (!Array.isArray(next.widgetOrder)) next.widgetOrder = [];
     /* null = the built-in tiles; anything else must be a list of tile objects. */
     if (next.tiles !== null && !Array.isArray(next.tiles)) next.tiles = null;
@@ -165,6 +176,46 @@ class VistaPlugin extends Plugin {
   }
 
   clearWeatherCache() { return W.writeCache(this.weatherStore(), this.weatherCacheKey(), { geo: null, last: null }); }
+
+  /* ---- Ask AI, per device ------------------------------------------------
+     Which AI this device asks, its API keys and the paths of the Claude Code
+     and Codex apps. Kept in this device's storage beside the weather cache,
+     never in data.json: data.json syncs, and the keys must not travel or
+     land in a vault backup. A computer starts on Claude Code (the user's
+     plan); a phone, which cannot run it, on Claude over the API. */
+  aiDeviceKey() {
+    let name = '';
+    try { name = this.app.vault.getName(); } catch (e) { /* unnamed */ }
+    return `${(this.manifest && this.manifest.id) || 'vista'}:ai:${name}`;
+  }
+
+  aiDevice() {
+    let saved = null;
+    try { saved = JSON.parse(this.weatherStore().getItem(this.aiDeviceKey()) || 'null'); } catch (e) { saved = null; }
+    const s = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    const fallback = this.aiRunner() ? 'claude-code' : 'claude';
+    const known = P.PROVIDERS.some(p => p.id === s.provider);
+    const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+    return { provider: known ? s.provider : fallback, keys: obj(s.keys), paths: obj(s.paths) };
+  }
+
+  /* part: { provider?, keys?, paths? } — keys and paths merge by AI. */
+  saveAiDevice(part) {
+    const cur = this.aiDevice();
+    const p = part || {};
+    const next = {
+      provider: p.provider || cur.provider,
+      keys: Object.assign({}, cur.keys, p.keys || {}),
+      paths: Object.assign({}, cur.paths, p.paths || {}),
+    };
+    try { this.weatherStore().setItem(this.aiDeviceKey(), JSON.stringify(next)); return true; } catch (e) { return false; }
+  }
+
+  /* Runs Claude Code / Codex; null on a phone. Made once, on first use. */
+  aiRunner() {
+    if (this._aiRunner === undefined) this._aiRunner = makeRunner();
+    return this._aiRunner;
+  }
 
   /* One-time move of the old data.json values. An entry already on this device
      is newer than anything that synced, so it is never overwritten. */

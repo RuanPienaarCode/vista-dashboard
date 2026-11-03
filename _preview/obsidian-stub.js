@@ -163,7 +163,16 @@ export function renderMatches(node, text, matches) {
 }
 
 /* Canned Open-Meteo answers so the weather chip renders offline. */
-export async function requestUrl({ url }) {
+export async function requestUrl({ url, body }) {
+  /* Ask AI: a canned Claude answer that proves what the chat was sent. */
+  if (url.includes('api.anthropic.com')) {
+    const b = JSON.parse(body || '{}');
+    const page = (String(b.system || '').split('<dashboard>')[1] || '').split('</dashboard>')[0].trim().split('\n');
+    const item = /<item>/.test(b.system || '') ? ' It was opened from one item.' : '';
+    const turns = (b.messages || []).length;
+    await new Promise(r => setTimeout(r, 700));
+    return { status: 200, json: { model: 'harness-claude', stop_reason: 'end_turn', content: [{ type: 'text', text: `**Harness answer** to turn ${turns}.${item}\n\nI was sent ${page.length} lines of the dashboard, starting:\n\n- ${page.slice(0, 3).join('\n- ')}` }] } };
+  }
   if (url.includes('geocoding-api')) return { status: 200, json: { results: [{ name: 'London', admin1: 'England', country_code: 'GB', latitude: 51.51, longitude: -0.13 }] } };
   if (url.includes('api.open-meteo.com')) {
     /* A realistic week from today, shaped like the live API. */

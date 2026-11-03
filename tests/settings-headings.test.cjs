@@ -15,12 +15,14 @@ const stub = require('./_stub.cjs');
 /* ---- minimal DOM: just enough for src/dom.js's el()/icon()/button() and
    settings-tab.js's own containerEl.empty()/classList/insertBefore. ---- */
 class FakeNode {
+  setAttribute(k, v) { this.attrs[k] = String(v); }
   constructor(tag) {
     this.tagName = String(tag || 'div').toUpperCase();
     this.children = [];
     this._classes = new Set();
     this._text = '';
     this.style = {};
+    this.attrs = {};
   }
   set className(v) { this._classes = new Set(String(v || '').split(/\s+/).filter(Boolean)); }
   get className() { return [...this._classes].join(' '); }
@@ -89,6 +91,7 @@ const app = {
   vault: { getFiles: () => [] },
 };
 const plugin = {
+  aiRunner: () => null, aiDevice: () => ({ provider: 'claude', keys: {}, paths: {} }), saveAiDevice() { return true; },
   settings: Object.assign({}, DEFAULT_SETTINGS),
   async saveSettings() {},
   refreshViews() {},
@@ -106,8 +109,8 @@ walk(tab.containerEl, n => {
 });
 
 assert.strictEqual(h3Count, 0, 'no raw <h3> should remain — Obsidian wants Setting().setHeading()');
-assert.strictEqual(headingCount, 5, `expected 5 Setting().setHeading() sections, found ${headingCount}`);
-assert.deepStrictEqual(headingNames, ['Background', 'Effect', 'Panels', 'Weather', 'Tiles']);
+assert.strictEqual(headingCount, 6, `expected 6 Setting().setHeading() sections, found ${headingCount}`);
+assert.deepStrictEqual(headingNames, ['Background', 'Effect', 'Panels', 'Weather', 'Ask AI', 'Tiles']);
 
 /* The CSS class that only existed to style the old raw <h3> must not survive
    orphaned in styles.css once nothing references it. */

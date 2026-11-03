@@ -1,6 +1,8 @@
 'use strict';
 /* Bundle-safety gates for the real mobile floor (iOS 15 WebKit):
-   1. no lookbehind regex literals in src/;  2. no Node APIs in src/;
+   1. no lookbehind regex literals in src/;  2. no Node APIs in src/ (one
+      exception: src/ai-cli.js reaches Node through window.require at run
+      time, on a computer only — see the block below);
    3. no innerHTML assignment;  4. the built main.js (when present) evaluates
    against an obsidian stub and exports a Plugin subclass. */
 const assert = require('node:assert');
@@ -11,11 +13,21 @@ const Module = require('node:module');
 const root = path.join(__dirname, '..');
 const srcDir = path.join(root, 'src');
 const NODE_REQUIRES = /require\(\s*['"](?:node:)?(fs|path|os|child_process|crypto|http|https|net|electron)['"]\s*\)/;
+/* The only file allowed to touch Node: Claude Code and Codex are run from it. */
+const NODE_ALLOWED = 'ai-cli.js';
 
 for (const f of fs.readdirSync(srcDir).filter(f => f.endsWith('.js'))) {
   const text = fs.readFileSync(path.join(srcDir, f), 'utf8');
   assert.ok(!text.includes('(?<'), `${f}: lookbehind/named-group regex literal — iOS 15 fatal`);
-  assert.ok(!NODE_REQUIRES.test(text), `${f}: Node API require — mobile fatal`);
+  if (f === NODE_ALLOWED) {
+    /* Never a bare require (esbuild would try to bundle it), only window.require
+       at run time, and only after the desktop check. */
+    assert.ok(!/(^|[^.\w])require\(\s*['"](?:node:)?(fs|path|os|child_process)/m.test(text), `${f}: Node reached by a bare require — use window.require`);
+    assert.ok(/Platform\.isDesktopApp/.test(text), `${f}: must check Platform.isDesktopApp before window.require`);
+  } else {
+    assert.ok(!NODE_REQUIRES.test(text), `${f}: Node API require — mobile fatal`);
+    assert.ok(!/window\.require\b/.test(text), `${f}: window.require outside ${NODE_ALLOWED}`);
+  }
   assert.ok(!/\.innerHTML\s*=/.test(text), `${f}: innerHTML assignment — build DOM instead`);
 }
 

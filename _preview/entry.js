@@ -269,7 +269,12 @@ if (q.get('mode')) settings.photoMode = q.get('mode');
 
 /* The weather cache lives outside data.json (plugin.loadWeatherCache & co); the harness keeps it in memory. */
 let wxCache = { geo: null, last: null };
-const plugin = { app, settings, loadWeatherCache: () => wxCache, saveWeatherCache(p) { wxCache = Object.assign({}, wxCache, p); return true; }, clearWeatherCache() { wxCache = { geo: null, last: null }; return true; }, async saveSettings() { console.log('[saveSettings]', JSON.stringify(settings).length, 'bytes'); }, refreshViews() { ctl.refresh(); } };
+const plugin = { app, settings, loadWeatherCache: () => wxCache, saveWeatherCache(p) { wxCache = Object.assign({}, wxCache, p); return true; }, clearWeatherCache() { wxCache = { geo: null, last: null }; return true; }, async saveSettings() { console.log('[saveSettings]', JSON.stringify(settings).length, 'bytes'); }, refreshViews() { ctl.refresh(); },
+  /* Ask AI per-device store (main.js keeps it in localStorage). The harness
+     starts on Claude with a fake key; the stub's requestUrl answers it. */
+  aiRunner: () => null,
+  aiDevice() { try { return Object.assign({ provider: 'claude', keys: { claude: 'harness' }, paths: {} }, JSON.parse(localStorage.getItem('vista-harness:ai') || '{}')); } catch (e) { return { provider: 'claude', keys: { claude: 'harness' }, paths: {} }; } },
+  saveAiDevice(part) { const c = this.aiDevice(); localStorage.setItem('vista-harness:ai', JSON.stringify({ provider: part.provider || c.provider, keys: Object.assign({}, c.keys, part.keys), paths: Object.assign({}, c.paths, part.paths) })); return true; } };
 const view = { plugin, contentEl: document.getElementById('app'), registerEvent() {}, registerInterval() {} };
 const ctl = mountDashboard(view);
 

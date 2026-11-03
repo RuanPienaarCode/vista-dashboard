@@ -57,4 +57,16 @@ function ruleContaining(needle) {
   assert.ok(Number(m[1]) >= 16, `vs-capture-input font-size is ${m[1]}px — must be >= 16px to sit at/above iOS's auto-zoom threshold`);
 }
 
+
+/* --- Ask AI: answer bubbles must wrap a long link on iOS 15.0-15.3 too.
+   overflow-wrap: anywhere arrived in 15.4; word-break: break-word covers
+   the earlier 15.x, and any other rule using `anywhere` needs the same pair. --- */
+{
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const m of bare.matchAll(/\{[^{}]*overflow-wrap:\s*anywhere[^{}]*\}/g)) {
+    assert.ok(/word-break:\s*break-word/.test(m[0]), `overflow-wrap: anywhere is iOS 15.4+; pair it with word-break: break-word: ${m[0].slice(0, 80)}`);
+  }
+  assert.ok(/\.vs-ai-msg \{[^}]*word-break:\s*break-word/.test(bare), 'Ask AI bubbles must carry the iOS 15.0 wrap fallback');
+}
+
 console.log('css ios15 fixes OK');

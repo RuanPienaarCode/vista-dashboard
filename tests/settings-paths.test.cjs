@@ -22,7 +22,7 @@ const settings = [];
 class FakeSetting {
   constructor(parent) { this.nameEl = new N(); this.descEl = new N(); this.controlEl = new N(); this.settingEl = new N(); this.rec = { name: '', desc: '', text: null }; settings.push(this.rec); if (parent) parent.appendChild(this.settingEl); }
   setName(t) { this.rec.name = t; return this; } setDesc(t) { this.rec.desc = t; return this; } setHeading() { return this; }
-  addText(fn) { const api = { setPlaceholder: p => { this.rec.placeholder = p; return api; }, setValue: () => api, onChange: cb => { this.rec.text = cb; return api; } }; fn(api); return this; }
+  addText(fn) { const api = { inputEl: { setAttribute() {} }, setPlaceholder: p => { this.rec.placeholder = p; return api; }, setValue: () => api, onChange: cb => { this.rec.text = cb; return api; } }; fn(api); return this; }
   addDropdown(fn) { const api = { addOption: () => api, setValue: () => api, onChange: cb => { this.rec.change = cb; return api; } }; fn(api); return this; }
   addToggle(fn) { const api = { setValue: () => api, onChange: () => api }; fn(api); return this; }
   addSlider(fn) { const api = { setLimits: () => api, setValue: () => api, setDynamicTooltip: () => api, onChange: () => api }; fn(api); return this; }
@@ -39,7 +39,7 @@ const { VistaSettingTab } = require('../src/settings-tab');
 const { DEFAULT_SETTINGS } = require('../src/constants');
 
 let cleared = 0, saved = 0;
-const plugin = { settings: Object.assign({}, DEFAULT_SETTINGS, { background: 'photos' }), async saveSettings() { saved++; }, refreshViews() {}, clearWeatherCache() { cleared++; } };
+const plugin = { aiRunner: () => null, aiDevice: () => ({ provider: 'claude', keys: {}, paths: {} }), saveAiDevice() { return true; }, settings: Object.assign({}, DEFAULT_SETTINGS, { background: 'photos' }), async saveSettings() { saved++; }, refreshViews() {}, clearWeatherCache() { cleared++; } };
 const tab = new VistaSettingTab({ vault: { getFiles: () => [] } }, plugin);
 tab.display();
 const by = name => { const r = settings.find(x => x.name === name); assert.ok(r, `setting "${name}" not found`); return r; };
