@@ -611,7 +611,15 @@
 .vs-app .vs-ai-empty-sub { font-size: 13px; color: var(--vs-faint); margin-top: 6px; }
 /* overflow-wrap: anywhere is iOS 15.4+; word-break: break-word does the same
    job on 15.0-15.3, so a long link can't push the panel sideways there. */
-.vs-app .vs-ai-msg { max-width: 92%; font-size: 14px; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere; }
+.vs-app .vs-ai-msg { max-width: 92%; font-size: 14px; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere; position: relative; -webkit-user-select: text; user-select: text; }
+/* Obsidian makes the whole app unselectable; iOS 15 reads only the prefixed
+   property, so every message opts in with both: the list, each bubble, a
+   question's text, an answer and all the Markdown renderer draws inside it.
+   Buttons stay unselectable, so a drag across a bubble never picks up the
+   words "Copy" or "Copied". */
+.vs-app .vs-ai-list, .vs-app .vs-ai-qtext, .vs-app .vs-ai-body { -webkit-user-select: text; user-select: text; }
+.vs-app .vs-ai-body * { -webkit-user-select: text; user-select: text; }
+.vs-app .vs-ai-list button { -webkit-user-select: none; user-select: none; }
 .vs-app .vs-ai-msg.is-user { align-self: flex-end; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: var(--vs-glass-3); white-space: pre-wrap; }
 .vs-app .vs-ai-msg.is-ai { align-self: flex-start; padding: 8px 12px 6px; border-radius: 14px 14px 14px 4px; background: var(--vs-glass); }
 .vs-app .vs-ai-msg.is-error { color: var(--vs-late-ink); background: var(--vs-late-bg); padding-bottom: 8px; }
@@ -653,6 +661,23 @@
 .vs-app .vs-ai .vs-ai-tool .vs-icon, .vs-app .vs-ai .vs-ai-tool .vs-icon svg { width: 13px; height: 13px; }
 @media (hover: hover) { .vs-app .vs-ai .vs-ai-tool:hover { background: var(--vs-glass-2); color: var(--vs-ink); } }
 .vs-app .vs-ai-note { font-size: 11px; color: var(--vs-faint); margin-left: 4px; }
+/* Copy: "Copied" shows on the button itself for a moment. The question's
+   button is icon-only, left of the bubble: shown on hover, .6 where there is
+   no hover. */
+.vs-app .vs-ai .vs-ai-copy.is-copied { color: var(--vs-green); }
+.vs-app .vs-ai .vs-ai-iconbtn.is-copied { color: var(--vs-green); }
+.vs-app .vs-ai .vs-ai-iconbtn:disabled { opacity: 0.4; cursor: default; }
+.vs-app .vs-ai .vs-ai-copy-q { position: absolute; left: -30px; top: 50%; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-top: -13px; border-radius: 8px; color: var(--vs-faint); opacity: 0; transition: opacity 120ms ease; }
+.vs-app .vs-ai .vs-ai-copy-q .vs-icon, .vs-app .vs-ai .vs-ai-copy-q .vs-icon svg { width: 14px; height: 14px; }
+.vs-app .vs-ai .vs-ai-copy-q.is-copied { opacity: 1; }
+.vs-app .vs-ai .vs-ai-msg.is-user .vs-ai-copy-q:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  .vs-app .vs-ai .vs-ai-msg.is-user:hover .vs-ai-copy-q { opacity: 1; }
+  .vs-app .vs-ai .vs-ai-copy-q:hover { background: var(--vs-glass-2); color: var(--vs-ink); }
+}
+@media (hover: none) {
+  .vs-app .vs-ai .vs-ai-copy-q { opacity: 0.6; }
+}
 .vs-app .vs-ai-msg.is-thinking { display: flex; gap: 5px; padding: 12px 14px; }
 .vs-app .vs-ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--vs-dim); animation: vs-ai-dot 1.2s ease-in-out infinite; }
 .vs-app .vs-ai-dot:nth-child(2) { animation-delay: 0.15s; }

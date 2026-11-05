@@ -69,6 +69,18 @@ function safeAnswer(text) {
     .replace(/<\/?(img|iframe|video|audio|source|embed|object|picture|link|frame|frameset|svg|image)\b[^>]*>/gi, '');
 }
 
+/* The whole chat as plain text for the clipboard: who said what, each answer
+   through safeAnswer (as it is drawn) and trimmed. An error line is not part
+   of the conversation. o: { page, ai, messages: [{ role, content, error? }] } */
+function chatText(o) {
+  const lines = [`Ask AI: ${o.page}`];
+  for (const m of o.messages || []) {
+    if (!m || m.error) continue;
+    lines.push(m.role === 'user' ? `You: ${m.content}` : `${o.ai}: ${safeAnswer(m.content).trim()}`);
+  }
+  return lines.join('\n\n');
+}
+
 /* A chat note's file name: "2026-11-03 2214 What should I". No characters
    a file name can't hold, at most six words of the first question. */
 function chatNoteName(now, firstQuestion) {
@@ -113,4 +125,4 @@ function askAIOn(settings, platform) {
   return !settings || settings.showAskAI !== false;
 }
 
-module.exports = { PAGE_MAX, askAIOn, tidyText, safeAnswer, systemPrompt, chatNoteName, chatMarkdown, journalEntry };
+module.exports = { PAGE_MAX, askAIOn, tidyText, safeAnswer, chatText, systemPrompt, chatNoteName, chatMarkdown, journalEntry };

@@ -49,7 +49,7 @@ function mountAskAI(o) {
      is still filed; Stop and Clear set it to null, which drops the answer. */
   const chat = plugin.aiChat;
   let open = false, stopped = false;
-  let fab, panel, listEl, chipEl, nameEl, input, sendBtn;
+  let fab, panel, listEl, chipEl, nameEl, input, sendBtn, copyAllBtn;
   /* Owns the Markdown renderer's children for the drawn list; replaced on
      every redraw so they never pile up. */
   let md = null;
@@ -70,6 +70,8 @@ function mountAskAI(o) {
     el(title, 'span', 'vs-ai-title-text', 'Ask AI');
     nameEl = el(title, 'span', 'vs-ai-provider');
     el(head, 'span', 'vs-spacer');
+    copyAllBtn = button(head, 'vs-ai-iconbtn vs-ai-copyall', null, () => copy(copyAllBtn, C.chatText({ page: chat.item ? chat.item.label : 'Vista dashboard', ai: deviceProvider().name, messages: chat.messages })), 'copy');
+    copyAllBtn.title = 'Copy the whole chat'; copyAllBtn.setAttribute('aria-label', 'Copy the whole chat');
     const save = button(head, 'vs-ai-iconbtn', null, () => saveChat(), 'save');
     save.title = 'Save this chat to a note'; save.setAttribute('aria-label', 'Save chat');
     const wipe = button(head, 'vs-ai-iconbtn', null, () => clearChat(), 'eraser');
@@ -151,13 +153,20 @@ function mountAskAI(o) {
       el(empty, 'div', 'vs-ai-empty-sub', `Answers come from ${deviceProvider().name}. It can read this page but cannot change anything.`);
     }
     chat.messages.forEach((m, i) => {
-      if (m.role === 'user') { el(listEl, 'div', 'vs-ai-msg is-user', m.content); return; }
+      if (m.role === 'user') {
+        const you = el(listEl, 'div', 'vs-ai-msg is-user');
+        el(you, 'div', 'vs-ai-qtext', m.content);
+        const cq = button(you, 'vs-ai-copy vs-ai-copy-q', null, () => copy(cq, m.content), 'copy');
+        cq.title = 'Copy this question'; cq.setAttribute('aria-label', 'Copy this question');
+        return;
+      }
       const wrap = el(listEl, 'div', 'vs-ai-msg is-ai' + (m.error ? ' is-error' : ''));
       const body = el(wrap, 'div', 'vs-ai-body');
       if (m.error) { body.textContent = m.content; return; }
       renderAnswer(body, m.content);
       const tools = el(wrap, 'div', 'vs-ai-tools');
-      button(tools, 'vs-ai-tool', 'Copy', () => copy(m.content), 'copy');
+      const ca = button(tools, 'vs-ai-tool vs-ai-copy', 'Copy', () => copy(ca, C.safeAnswer(m.content).trim()), 'copy');
+      ca.setAttribute('aria-label', 'Copy this answer');
       button(tools, 'vs-ai-tool', 'Add to journal', () => toJournal(i), 'pen-line');
       if (m.cut) el(tools, 'span', 'vs-ai-note', 'cut short');
     });
@@ -167,6 +176,7 @@ function mountAskAI(o) {
       t.setAttribute('aria-label', 'Thinking');
     }
     listEl.scrollTop = listEl.scrollHeight;
+    copyAllBtn.disabled = !chat.messages.some(m => !m.error);
     sendBtn.classList.toggle('is-stop', !!chat.pending);
     clear(sendBtn);
     icon(sendBtn, chat.pending ? 'square' : 'arrow-up');
@@ -254,8 +264,29 @@ function mountAskAI(o) {
     input.focus();
   }
 
-  async function copy(text) {
-    try { await navigator.clipboard.writeText(text); new Notice('Copied.'); } catch (e) { new Notice('Vista: could not copy.'); }
+  /* Put text on the clipboard and say so on the button for a moment. A
+     refused write (no clipboard, or the window not focused) is shown as an
+     error line in the chat, never swallowed. */
+  async function copy(btn, text) {
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('this window has no clipboard');
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      chat.messages.push({ role: 'assistant', content: 'Could not copy: ' + String((e && e.message) || e), error: true });
+      renderList();
+      return;
+    }
+    const label = btn.querySelector('.vs-btn-label');
+    const was = label ? label.textContent : '';
+    const show = (name, words, on) => {
+      const old = btn.querySelector('.vs-icon');
+      if (old) { const fresh = icon(btn, name); btn.insertBefore(fresh, old); old.remove(); }
+      if (label) label.textContent = words;
+      btn.classList.toggle('is-copied', on);
+    };
+    show('check', 'Copied', true);
+    clearTimeout(btn._copied);
+    btn._copied = setTimeout(() => show('copy', was, false), 1600);
   }
 
   function questionFor(i) {
